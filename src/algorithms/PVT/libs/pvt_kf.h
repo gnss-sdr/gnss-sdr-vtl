@@ -2,7 +2,7 @@
  * \file pvt_kf.h
  * \brief Kalman Filter for Position and Velocity
  * \author Javier Arribas, 2023. jarribas(at)cttc.es
- *
+ * \author Miguel Angel Gomez Lopez, 2023. gomezlma(at)alumnos.upm.es
  *
  * -----------------------------------------------------------------------------
  *
@@ -37,13 +37,16 @@ public:
     virtual ~Pvt_Kf() = default;
     void init_Kf(const arma::vec& p,
         const arma::vec& v,
-        double update_interval_s,
+        const arma::vec& res_pv,
+        double solver_interval_s,
+        bool static_scenario_sd,
+        bool estatic_measures_sd,
         double measures_ecef_pos_sd_m,
         double measures_ecef_vel_sd_ms,
         double system_ecef_pos_sd_m,
         double system_ecef_vel_sd_ms);
     bool is_initialized() const;
-    void run_Kf(const arma::vec& p, const arma::vec& v);
+    void run_Kf(const arma::vec& p, const arma::vec& v, const arma::vec& res_pv);
     void get_pv_Kf(arma::vec& p, arma::vec& v) const;
     void reset_Kf();
 
@@ -60,6 +63,8 @@ private:
     arma::vec d_x_new_old;
     arma::vec d_x_new_new;
     bool d_initialized{false};
+    bool d_static{false};
+    bool scenario_static{false};
 };
 
 

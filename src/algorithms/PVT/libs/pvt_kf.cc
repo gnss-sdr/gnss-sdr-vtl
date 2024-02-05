@@ -2,6 +2,7 @@
  * \file pvt_kf.cc
  * \brief Kalman Filter for Position and Velocity
  * \author Javier Arribas, 2023. jarribas(at)cttc.es
+ * \author Miguel Angel Gomez Lopez, 2023. gomezlma(at)alumnos.upm.es
  *
  *
  * -----------------------------------------------------------------------------
@@ -21,14 +22,25 @@
 
 void Pvt_Kf::init_Kf(const arma::vec& p,
     const arma::vec& v,
-    double update_interval_s,
+    const arma::vec& res_pv,
+    double solver_interval_s,
+    bool static_scenario_sd,
+    bool estatic_measures_sd,
     double measures_ecef_pos_sd_m,
     double measures_ecef_vel_sd_ms,
     double system_ecef_pos_sd_m,
     double system_ecef_vel_sd_ms)
 {
     // Kalman Filter class variables
-    const double Ti = update_interval_s;
+    const double Ti = solver_interval_s;
+    if (static_scenario_sd)
+        {
+            scenario_static = true;
+        }
+    else
+        {
+            scenario_static = false;
+        }
 
     d_F = {{1.0, 0.0, 0.0, Ti, 0.0, 0.0},
         {0.0, 1.0, 0.0, 0.0, Ti, 0.0},
@@ -40,13 +52,28 @@ void Pvt_Kf::init_Kf(const arma::vec& p,
     d_H = arma::eye(6, 6);
 
     // measurement matrix static covariances
-    d_R = {{pow(measures_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0, 0.0, 0.0},
-        {0.0, pow(measures_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0, 0.0},
-        {0.0, 0.0, pow(measures_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0},
-        {0.0, 0.0, 0.0, pow(measures_ecef_vel_sd_ms, 2.0), 0.0, 0.0},
-        {0.0, 0.0, 0.0, 0.0, pow(measures_ecef_vel_sd_ms, 2.0), 0.0},
-        {0.0, 0.0, 0.0, 0.0, 0.0, pow(measures_ecef_vel_sd_ms, 2.0)}};
+    if (estatic_measures_sd)
+        {
+            d_R = {{pow(measures_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0, 0.0, 0.0},
+                {0.0, pow(measures_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0, 0.0},
+                {0.0, 0.0, pow(measures_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0, pow(measures_ecef_vel_sd_ms, 2.0), 0.0, 0.0},
+                {0.0, 0.0, 0.0, 0.0, pow(measures_ecef_vel_sd_ms, 2.0), 0.0},
+                {0.0, 0.0, 0.0, 0.0, 0.0, pow(measures_ecef_vel_sd_ms, 2.0)}};
 
+            d_static = true;
+        }
+    else
+        {
+            d_R = {{res_pv[0], res_pv[3], res_pv[5], 0.0, 0.0, 0.0},
+                {res_pv[3], res_pv[1], res_pv[4], 0.0, 0.0, 0.0},
+                {res_pv[5], res_pv[4], res_pv[2], 0.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0, res_pv[6], res_pv[9], res_pv[11]},
+                {0.0, 0.0, 0.0, res_pv[9], res_pv[7], res_pv[10]},
+                {0.0, 0.0, 0.0, res_pv[11], res_pv[10], res_pv[8]}};
+
+            d_static = false;
+        }
     // system covariance matrix (static)
     d_Q = {{pow(system_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0, 0.0, 0.0},
         {0.0, pow(system_ecef_pos_sd_m, 2.0), 0.0, 0.0, 0.0, 0.0},
@@ -92,8 +119,9 @@ void Pvt_Kf::reset_Kf()
 }
 
 
-void Pvt_Kf::run_Kf(const arma::vec& p, const arma::vec& v)
+void Pvt_Kf::run_Kf(const arma::vec& p, const arma::vec& v, const arma::vec& res_pv)
 {
+    // bool static_scenario = true;
     if (d_initialized)
         {
             // Kalman loop
@@ -104,11 +132,30 @@ void Pvt_Kf::run_Kf(const arma::vec& p, const arma::vec& v)
             // Measurement update
             try
                 {
-                    arma::vec z = arma::join_cols(p, v);
+                    if (!d_static)
+                        {
+                            // Measurement residuals non-static update
+                            d_R = {{res_pv[0], res_pv[3], res_pv[5], 0.0, 0.0, 0.0},
+                                {res_pv[3], res_pv[1], res_pv[4], 0.0, 0.0, 0.0},
+                                {res_pv[5], res_pv[4], res_pv[2], 0.0, 0.0, 0.0},
+                                {0.0, 0.0, 0.0, res_pv[6], res_pv[9], res_pv[11]},
+                                {0.0, 0.0, 0.0, res_pv[9], res_pv[7], res_pv[10]},
+                                {0.0, 0.0, 0.0, res_pv[11], res_pv[10], res_pv[8]}};
+                        }
+                    arma::vec z = arma::zeros(6);
+                    if (scenario_static)
+                        {
+                            d_x_new_old[3] = 0;
+                            d_x_new_old[4] = 0;
+                            d_x_new_old[5] = 0;
+                        }
+
+                    z = arma::join_cols(p, v);
                     arma::mat K = d_P_new_old * d_H.t() * arma::inv(d_H * d_P_new_old * d_H.t() + d_R);  // Kalman gain
 
                     d_x_new_new = d_x_new_old + K * (z - d_H * d_x_new_old);
-                    d_P_new_new = (arma::eye(6, 6) - K * d_H) * d_P_new_old;
+                    arma::mat A = (arma::eye(6, 6) - K * d_H);
+                    d_P_new_new = A * d_P_new_old * A.t() + K * d_R * K.t();
 
                     // prepare data for next KF epoch
                     d_x_old_old = d_x_new_new;
