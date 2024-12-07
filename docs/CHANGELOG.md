@@ -41,6 +41,28 @@ All notable changes to GNSS-SDR will be documented in this file.
   - `-DENABLE_DMA_PROXY`: Checks if the DMA proxy driver is installed for
     controlling the DMA in the FPGA and enables its usage.
 
+- Add the `ION_GSMS_Signal_Source`, which is able to process raw data files
+  described with the
+  [ION GNSS Software Defined Receiver Metadata Standard](https://sdr.ion.org/).
+  It requires the `-DENABLE_ION=ON` building configuration option.
+- The `Monitor` and `PVT` blocks are now able to send data to multiple UDP
+  ports.
+- Add experimental decoding of Galileo's I/NAV ARAIM Integrity Support Message
+  (ISM) as defined in the OS SIS ICD v2.1. Values, if received, are only logged
+  but not used.
+- Added new
+  [`Cshort_To_Gr_Complex`](https://gnss-sdr.org/docs/sp-blocks/data-type-adapter/#implementation-cshort_to_gr_complex)
+  Data Type Adapter implementation.
+- The
+  [Osmosdr_Signal_Source](https://gnss-sdr.org/docs/sp-blocks/signal-source/#implementation-osmosdr_signal_source)
+  has gained two new optional configuration parameters: `iq_balance_mode` and
+  `dc_offset_mode`, both of which are set to Automatic by default.
+
+### Improvements in Maintainability:
+
+- Updated GSL implementation to v0.42.0. See the
+  [gsl-lite release](https://github.com/gsl-lite/gsl-lite/releases/tag/v0.42.0).
+
 ### Improvements in Portability:
 
 - Fix building against google-glog 0.7.x.
@@ -74,10 +96,42 @@ All notable changes to GNSS-SDR will be documented in this file.
   This change has a downside in maintainability, since the source code becomes
   plagued with preprocessor directives required to maintain compatibility both
   with gflags and glog, and with Abseil.
+- Historically, GNSS-SDR linked against the GnuTLS library for cryptographic
+  functions. If GnuTLS was not found, then the building system looked for and
+  linked against OpenSSL as a fallback. This was due to the OpenSSL 1.x dual
+  license scheme, which was incompatible with GPL v3.0 license, preventing it
+  from being a mandatory dependency for GNSS-SDR in most GNU/Linux
+  distributions. This issue was solved with the release of OpenSSL 3.0.0, which
+  transitioned to the Apache License 2.0, fully compatible with GPL v3.0.
+  Accordingly, the GNSS-SDR building system now looks for OpenSSL in the first
+  place and, if not found, then it looks for GnuTLS as a fallback.
+
+### Reliability
+
+- Implementation of the Galileo Open Service Navigation Message Authentication
+  (OSNMA), a data authentication function for the Galileo Open Service worldwide
+  users, freely accessible to all. OSNMA provides receivers with the assurance
+  that the received Galileo navigation message is coming from the system itself
+  and has not been modified. OSNMA is enabled by default if the receiver
+  configuration defines Galileo E1 OS channels. More details can be found in
+  [Introducing GNSS Navigation Message Authentication](https://gnss-sdr.org/osnma).
 
 ### Improvements in Usability:
 
 - Tidy up the `conf/` folder.
+- Add `install` and `uninstall` targets to the `nav_msg_listener` utility.
+- **Potential Breaking Change**: The source tree has been refactored to follow a
+  more conventional folder structure. This may disrupt user pipelines that
+  relied on the previous structure and could break development branches that
+  were branched off from `next` before this change. The key changes are:
+
+  - The `tests` and `utils` directories have been moved from the `src` folder to
+    the root of the source tree.
+  - The empty `build` and `data` folders have been removed. Users can create a
+    building folder using `mkdir build` or by having CMake handle it:
+    `cmake -S . -B build`.
+  - All default names for dump or input files starting with `../data/<filename>`
+    have been changed to `./<filename>`.
 
 See the definitions of concepts and metrics at
 https://gnss-sdr.org/design-forces/
