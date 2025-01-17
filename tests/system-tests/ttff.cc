@@ -21,11 +21,13 @@
 #include "control_thread.h"
 #include "file_configuration.h"
 #include "gnss_flowgraph.h"
+#include "gnss_sdr_make_unique.h"
 #include "gps_acq_assist.h"
 #include "in_memory_configuration.h"
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/exception/exception.hpp>
+#include <boost/interprocess/ipc/message_queue.hpp>
 #include <gtest/gtest.h>
 #include <cerrno>
 #include <chrono>
@@ -35,9 +37,6 @@
 #include <numeric>
 #include <random>
 #include <string>
-#include <sys/ipc.h>
-#include <sys/msg.h>
-#include <sys/types.h>
 #include <thread>
 
 #if USE_GLOG_AND_GFLAGS
@@ -78,13 +77,6 @@ Concurrent_Queue<Gps_Acq_Assist> global_gps_acq_assist_queue;
 Concurrent_Map<Gps_Acq_Assist> global_gps_acq_assist_map;
 
 std::vector<double> TTFF_v;
-
-typedef struct
-{
-    long mtype;  // required by SysV message
-    double ttff;
-} ttff_msgbuf;
-
 
 class TtffTest : public ::testing::Test
 {
@@ -142,7 +134,7 @@ void TtffTest::config_1()
 #if USE_GLOG_AND_GFLAGS
     config->set_property("GNSS-SDR.internal_fs_sps", std::to_string(FLAGS_fs_in));
 #else
-
+    config->set_property("GNSS-SDR.internal_fs_sps", std::to_string(absl::GetFlag(FLAGS_fs_in)));
 #endif
     // Set the assistance system parameters
     config->set_property("GNSS-SDR.SUPL_gps_ephemeris_server", "supl.google.com");
@@ -165,7 +157,10 @@ void TtffTest::config_1()
     config->set_property("SignalSource.samples", std::to_string(FLAGS_fs_in * FLAGS_max_measurement_duration));
     config->set_property("SignalSource.device_address", FLAGS_device_address);
 #else
-
+    config->set_property("SignalSource.sampling_frequency", std::to_string(absl::GetFlag(FLAGS_fs_in)));
+    config->set_property("SignalSource.subdevice", absl::GetFlag(FLAGS_subdevice));
+    config->set_property("SignalSource.samples", std::to_string(absl::GetFlag(FLAGS_fs_in) * absl::GetFlag(FLAGS_max_measurement_duration)));
+    config->set_property("SignalSource.device_address", absl::GetFlag(FLAGS_device_address));
 #endif
 
     // Set the Signal Conditioner
@@ -194,7 +189,7 @@ void TtffTest::config_1()
 #if USE_GLOG_AND_GFLAGS
     config->set_property("InputFilter.sampling_frequency", std::to_string(FLAGS_fs_in));
 #else
-
+    config->set_property("InputFilter.sampling_frequency", std::to_string(absl::GetFlag(FLAGS_fs_in)));
 #endif
     config->set_property("InputFilter.IF", std::to_string(zero));
     config->set_property("Resampler.implementation", "Pass_Through");
@@ -204,7 +199,8 @@ void TtffTest::config_1()
     config->set_property("Resampler.sample_freq_in", std::to_string(FLAGS_fs_in));
     config->set_property("Resampler.sample_freq_out", std::to_string(FLAGS_fs_in));
 #else
-
+    config->set_property("Resampler.sample_freq_in", std::to_string(absl::GetFlag(FLAGS_fs_in)));
+    config->set_property("Resampler.sample_freq_out", std::to_string(absl::GetFlag(FLAGS_fs_in)));
 #endif
 
     // Set the number of Channels
@@ -277,51 +273,90 @@ void TtffTest::config_2()
     d_sampling_rate = config2->property("GNSS-SDR.internal_fs_sps", FLAGS_fs_in);
     config2->set_property("SignalSource.samples", std::to_string(d_sampling_rate * FLAGS_max_measurement_duration));
 #else
+    if (absl::GetFlag(FLAGS_config_file_ttff).empty())
+        {
+            std::string path = std::string(TEST_PATH);
+            std::string filename = path + "../../conf/gnss-sdr_GPS_L1_USRP_X300_realtime.conf";
+            config2 = std::make_shared<FileConfiguration>(filename);
+        }
+    else
+        {
+            config2 = std::make_shared<FileConfiguration>(absl::GetFlag(FLAGS_config_file_ttff));
+        }
 
+    int d_sampling_rate;
+    d_sampling_rate = config2->property("GNSS-SDR.internal_fs_sps", absl::GetFlag(FLAGS_fs_in));
+    config2->set_property("SignalSource.samples", std::to_string(d_sampling_rate * absl::GetFlag(FLAGS_max_measurement_duration)));
 #endif
 }
 
 
 void receive_msg()
 {
-    ttff_msgbuf msg;
-    ttff_msgbuf msg_stop;
-    msg_stop.mtype = 1;
-    msg_stop.ttff = -200.0;
-    double ttff_msg = 0.0;
-    int msgrcv_size = sizeof(msg.ttff);
-    int msqid;
-    int msqid_stop = -1;
-    key_t key = 1101;
-    key_t key_stop = 1102;
     bool leave = false;
 
     while (!leave)
         {
-            // wait for the queue to be created
-            while ((msqid = msgget(key, 0644)) == -1)
+            // wait for the queues to be created
+            const std::string queue_name = "gnss_sdr_ttff_message_queue";
+            std::unique_ptr<boost::interprocess::message_queue> d_mq;
+            bool queue_found = false;
+            while (!queue_found)
                 {
+                    try
+                        {
+                            // Attempt to open the message queue
+                            d_mq = std::make_unique<boost::interprocess::message_queue>(boost::interprocess::open_only, queue_name.c_str());
+                            queue_found = true;  // Queue found
+                        }
+                    catch (const boost::interprocess::interprocess_exception &)
+                        {
+                            // Queue not found, wait and retry
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        }
                 }
 
-            if (msgrcv(msqid, &msg, msgrcv_size, 1, 0) != -1)
+            double received_message;
+            unsigned int priority;
+            std::size_t received_size;
+            // Receive a message (non-blocking)
+            if (d_mq->try_receive(&received_message, sizeof(received_message), received_size, priority))
                 {
-                    ttff_msg = msg.ttff;
-                    if ((ttff_msg != 0) && (ttff_msg != -1))
+                    // Validate the size of the received message
+                    if (received_size == sizeof(double) && (received_message != 0) && (received_message != -1))
                         {
-                            TTFF_v.push_back(ttff_msg);
-                            LOG(INFO) << "Valid Time-To-First-Fix: " << ttff_msg << "[s]";
+                            TTFF_v.push_back(received_message);
+                            LOG(INFO) << "Valid Time-To-First-Fix: " << received_message << " [s]";
                             // Stop the receiver
-                            while (((msqid_stop = msgget(key_stop, 0644))) == -1)
+                            double stop_message = -200.0;
+                            const std::string queue_name_stop = "receiver_control_queue";
+                            std::unique_ptr<boost::interprocess::message_queue> d_mq_stop;
+                            bool queue_found2 = false;
+                            while (!queue_found2)
                                 {
+                                    try
+                                        {
+                                            // Attempt to open the message queue
+                                            d_mq_stop = std::make_unique<boost::interprocess::message_queue>(boost::interprocess::open_only, queue_name_stop.c_str());
+                                            queue_found2 = true;  // Queue found
+                                        }
+                                    catch (const boost::interprocess::interprocess_exception &)
+                                        {
+                                            // Queue not found, wait and retry
+                                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                                        }
                                 }
-                            double msgsend_size = sizeof(msg_stop.ttff);
-                            msgsnd(msqid_stop, &msg_stop, msgsend_size, IPC_NOWAIT);
+                            d_mq_stop->send(&stop_message, sizeof(stop_message), 0);
                         }
-
-                    if (std::abs(ttff_msg - (-1.0)) < 10 * std::numeric_limits<double>::epsilon())
+                    if (received_size == sizeof(double) && std::abs(received_message - (-1.0)) < 10 * std::numeric_limits<double>::epsilon())
                         {
                             leave = true;
                         }
+                }
+            else
+                {
+                    // No message available, add a small delay to prevent busy-waiting
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 }
         }
 }
@@ -495,7 +530,6 @@ TEST_F(TtffTest /*unused*/, ColdStart /*unused*/)
             std::cout << "Starting measurement " << num_measurements + 1 << " / " << FLAGS_num_measurements << '\n';
 #else
             std::cout << "Starting measurement " << num_measurements + 1 << " / " << absl::GetFlag(FLAGS_num_measurements) << '\n';
-
 #endif
             std::chrono::time_point<std::chrono::system_clock> start;
             std::chrono::time_point<std::chrono::system_clock> end;
@@ -699,23 +733,23 @@ int main(int argc, char **argv)
         }
 
     // Terminate the queue thread
-    key_t sysv_msg_key;
-    int sysv_msqid;
-    sysv_msg_key = 1101;
-    int msgflg = IPC_CREAT | 0666;
-    if ((sysv_msqid = msgget(sysv_msg_key, msgflg)) == -1)
+    const std::string queue_name = "gnss_sdr_ttff_message_queue";
+    boost::interprocess::message_queue::remove(queue_name.c_str());
+
+    // Create a new message queue
+    auto mq = std::make_unique<boost::interprocess::message_queue>(
+        boost::interprocess::create_only,  // Create a new queue
+        queue_name.c_str(),                // Queue name
+        10,                                // Maximum number of messages
+        sizeof(double)                     // Maximum message size
+    );
+    double finish = -1.0;
+    if (mq)
         {
-            std::cout << "GNSS-SDR can not create message queues!\n";
-            return 1;
+            mq->send(&finish, sizeof(finish), 0);
         }
-    ttff_msgbuf msg;
-    msg.mtype = 1;
-    msg.ttff = -1;
-    int msgsend_size;
-    msgsend_size = sizeof(msg.ttff);
-    msgsnd(sysv_msqid, &msg, msgsend_size, IPC_NOWAIT);
     receive_msg_thread.join();
-    msgctl(sysv_msqid, IPC_RMID, nullptr);
+    boost::interprocess::message_queue::remove(queue_name.c_str());
 
 #if USE_GLOG_AND_GFLAGS
     gflags::ShutDownCommandLineFlags();

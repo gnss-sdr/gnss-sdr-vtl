@@ -36,34 +36,34 @@
 #include "gnss_flowgraph.h"
 #include "gnss_satellite.h"
 #include "gnss_sdr_flags.h"
-#include "gps_acq_assist.h"        // for Gps_Acq_Assist
-#include "gps_almanac.h"           // for Gps_Almanac
-#include "gps_cnav_ephemeris.h"    // for Gps_CNAV_Ephemeris
-#include "gps_cnav_utc_model.h"    // for Gps_CNAV_Utc_Model
-#include "gps_ephemeris.h"         // for Gps_Ephemeris
-#include "gps_iono.h"              // for Gps_Iono
-#include "gps_utc_model.h"         // for Gps_Utc_Model
-#include "pvt_interface.h"         // for PvtInterface
-#include "rtklib.h"                // for gtime_t, alm_t
-#include "rtklib_conversions.h"    // for alm_to_rtklib
-#include "rtklib_ephemeris.h"      // for alm2pos, eph2pos
-#include "rtklib_rtkcmn.h"         // for utc2gpst
-#include <armadillo>               // for interaction with geofunctions
-#include <boost/lexical_cast.hpp>  // for bad_lexical_cast
-#include <pmt/pmt.h>               // for make_any
-#include <algorithm>               // for find, min
-#include <chrono>                  // for milliseconds
-#include <cmath>                   // for floor, fmod, log
-#include <csignal>                 // for signal, SIGINT
-#include <ctime>                   // for time_t, gmtime, strftime
-#include <exception>               // for exception
-#include <iostream>                // for operator<<
-#include <limits>                  // for numeric_limits
-#include <map>                     // for map
-#include <pthread.h>               // for pthread_cancel
-#include <stdexcept>               // for invalid_argument
-#include <sys/ipc.h>               // for IPC_CREAT
-#include <sys/msg.h>               // for msgctl, msgget
+#include "gnss_sdr_make_unique.h"
+#include "gps_acq_assist.h"                          // for Gps_Acq_Assist
+#include "gps_almanac.h"                             // for Gps_Almanac
+#include "gps_cnav_ephemeris.h"                      // for Gps_CNAV_Ephemeris
+#include "gps_cnav_utc_model.h"                      // for Gps_CNAV_Utc_Model
+#include "gps_ephemeris.h"                           // for Gps_Ephemeris
+#include "gps_iono.h"                                // for Gps_Iono
+#include "gps_utc_model.h"                           // for Gps_Utc_Model
+#include "pvt_interface.h"                           // for PvtInterface
+#include "rtklib.h"                                  // for gtime_t, alm_t
+#include "rtklib_conversions.h"                      // for alm_to_rtklib
+#include "rtklib_ephemeris.h"                        // for alm2pos, eph2pos
+#include "rtklib_rtkcmn.h"                           // for utc2gpst
+#include <armadillo>                                 // for interaction with geofunctions
+#include <boost/interprocess/ipc/message_queue.hpp>  // for message_queue
+#include <boost/lexical_cast.hpp>                    // for bad_lexical_cast
+#include <pmt/pmt.h>                                 // for make_any
+#include <algorithm>                                 // for find, min
+#include <chrono>                                    // for milliseconds
+#include <cmath>                                     // for floor, fmod, log
+#include <csignal>                                   // for signal, SIGINT
+#include <ctime>                                     // for time_t, gmtime, strftime
+#include <exception>                                 // for exception
+#include <iostream>                                  // for operator<<
+#include <limits>                                    // for numeric_limits
+#include <map>                                       // for map
+#include <pthread.h>                                 // for pthread_cancel
+#include <stdexcept>                                 // for invalid_argument
 
 #if USE_GLOG_AND_GFLAGS
 #include <glog/logging.h>
@@ -197,7 +197,7 @@ void ControlThread::init()
     supl_mns_ = 0;
     supl_lac_ = 0;
     supl_ci_ = 0;
-    msqid_ = -1;
+
     agnss_ref_location_ = Agnss_Ref_Location();
     agnss_ref_time_ = Agnss_Ref_Time();
 
@@ -244,9 +244,7 @@ void ControlThread::init()
     else
         {
             // fill agnss_ref_time_
-            struct tm tm
-            {
-            };
+            struct tm tm{};
             if (strptime(ref_time_str.c_str(), "%d/%m/%Y %H:%M:%S", &tm) != nullptr)
                 {
                     agnss_ref_time_.seconds = timegm(&tm);
@@ -273,14 +271,11 @@ void ControlThread::init()
 ControlThread::~ControlThread()  // NOLINT(modernize-use-equals-default)
 {
     DLOG(INFO) << "Control Thread destructor called";
-    if (msqid_ != -1)
-        {
-            msgctl(msqid_, IPC_RMID, nullptr);
-        }
+    boost::interprocess::message_queue::remove(control_message_queue_name_.c_str());
 
-    if (sysv_queue_thread_.joinable())
+    if (message_queue_thread_.joinable())
         {
-            sysv_queue_thread_.join();
+            message_queue_thread_.join();
         }
 
     if (cmd_interface_thread_.joinable())
@@ -429,7 +424,7 @@ int ControlThread::run()
         {
             keyboard_thread_ = std::thread(&ControlThread::keyboard_listener, this);
         }
-    sysv_queue_thread_ = std::thread(&ControlThread::sysv_queue_listener, this);
+    message_queue_thread_ = std::thread(&ControlThread::message_queue_listener, this);
 
     // start the telecommand listener thread
     cmd_interface_.set_pvt(flowgraph_->get_pvt());
@@ -563,8 +558,8 @@ bool ControlThread::read_assistance_from_XML()
                 {
                     std::map<int, Gps_Ephemeris>::const_iterator gps_eph_iter;
                     for (gps_eph_iter = supl_client_ephemeris_.gps_ephemeris_map.cbegin();
-                         gps_eph_iter != supl_client_ephemeris_.gps_ephemeris_map.cend();
-                         gps_eph_iter++)
+                        gps_eph_iter != supl_client_ephemeris_.gps_ephemeris_map.cend();
+                        gps_eph_iter++)
                         {
                             std::cout << "From XML file: Read NAV ephemeris for satellite " << Gnss_Satellite("GPS", gps_eph_iter->second.PRN) << '\n';
                             const std::shared_ptr<Gps_Ephemeris> tmp_obj = std::make_shared<Gps_Ephemeris>(gps_eph_iter->second);
@@ -593,8 +588,8 @@ bool ControlThread::read_assistance_from_XML()
                 {
                     std::map<int, Gps_Almanac>::const_iterator gps_alm_iter;
                     for (gps_alm_iter = supl_client_ephemeris_.gps_almanac_map.cbegin();
-                         gps_alm_iter != supl_client_ephemeris_.gps_almanac_map.cend();
-                         gps_alm_iter++)
+                        gps_alm_iter != supl_client_ephemeris_.gps_almanac_map.cend();
+                        gps_alm_iter++)
                         {
                             std::cout << "From XML file: Read GPS almanac for satellite " << Gnss_Satellite("GPS", gps_alm_iter->second.PRN) << '\n';
                             const std::shared_ptr<Gps_Almanac> tmp_obj = std::make_shared<Gps_Almanac>(gps_alm_iter->second);
@@ -611,8 +606,8 @@ bool ControlThread::read_assistance_from_XML()
                 {
                     std::map<int, Galileo_Ephemeris>::const_iterator gal_eph_iter;
                     for (gal_eph_iter = supl_client_ephemeris_.gal_ephemeris_map.cbegin();
-                         gal_eph_iter != supl_client_ephemeris_.gal_ephemeris_map.cend();
-                         gal_eph_iter++)
+                        gal_eph_iter != supl_client_ephemeris_.gal_ephemeris_map.cend();
+                        gal_eph_iter++)
                         {
                             std::cout << "From XML file: Read ephemeris for satellite " << Gnss_Satellite("Galileo", gal_eph_iter->second.PRN) << '\n';
                             const std::shared_ptr<Galileo_Ephemeris> tmp_obj = std::make_shared<Galileo_Ephemeris>(gal_eph_iter->second);
@@ -641,8 +636,8 @@ bool ControlThread::read_assistance_from_XML()
                 {
                     std::map<int, Galileo_Almanac>::const_iterator gal_alm_iter;
                     for (gal_alm_iter = supl_client_ephemeris_.gal_almanac_map.cbegin();
-                         gal_alm_iter != supl_client_ephemeris_.gal_almanac_map.cend();
-                         gal_alm_iter++)
+                        gal_alm_iter != supl_client_ephemeris_.gal_almanac_map.cend();
+                        gal_alm_iter++)
                         {
                             std::cout << "From XML file: Read Galileo almanac for satellite " << Gnss_Satellite("Galileo", gal_alm_iter->second.PRN) << '\n';
                             const std::shared_ptr<Galileo_Almanac> tmp_obj = std::make_shared<Galileo_Almanac>(gal_alm_iter->second);
@@ -658,8 +653,8 @@ bool ControlThread::read_assistance_from_XML()
                 {
                     std::map<int, Gps_CNAV_Ephemeris>::const_iterator gps_cnav_eph_iter;
                     for (gps_cnav_eph_iter = supl_client_ephemeris_.gps_cnav_ephemeris_map.cbegin();
-                         gps_cnav_eph_iter != supl_client_ephemeris_.gps_cnav_ephemeris_map.cend();
-                         gps_cnav_eph_iter++)
+                        gps_cnav_eph_iter != supl_client_ephemeris_.gps_cnav_ephemeris_map.cend();
+                        gps_cnav_eph_iter++)
                         {
                             std::cout << "From XML file: Read CNAV ephemeris for satellite " << Gnss_Satellite("GPS", gps_cnav_eph_iter->second.PRN) << '\n';
                             const std::shared_ptr<Gps_CNAV_Ephemeris> tmp_obj = std::make_shared<Gps_CNAV_Ephemeris>(gps_cnav_eph_iter->second);
@@ -683,8 +678,8 @@ bool ControlThread::read_assistance_from_XML()
                 {
                     std::map<int, Glonass_Gnav_Ephemeris>::const_iterator glo_gnav_eph_iter;
                     for (glo_gnav_eph_iter = supl_client_ephemeris_.glonass_gnav_ephemeris_map.cbegin();
-                         glo_gnav_eph_iter != supl_client_ephemeris_.glonass_gnav_ephemeris_map.cend();
-                         glo_gnav_eph_iter++)
+                        glo_gnav_eph_iter != supl_client_ephemeris_.glonass_gnav_ephemeris_map.cend();
+                        glo_gnav_eph_iter++)
                         {
                             std::cout << "From XML file: Read GLONASS GNAV ephemeris for satellite " << Gnss_Satellite("GLONASS", glo_gnav_eph_iter->second.PRN) << '\n';
                             const std::shared_ptr<Glonass_Gnav_Ephemeris> tmp_obj = std::make_shared<Glonass_Gnav_Ephemeris>(glo_gnav_eph_iter->second);
@@ -812,8 +807,8 @@ void ControlThread::assist_GNSS()
                         {
                             std::map<int, Gps_Ephemeris>::const_iterator gps_eph_iter;
                             for (gps_eph_iter = supl_client_ephemeris_.gps_ephemeris_map.cbegin();
-                                 gps_eph_iter != supl_client_ephemeris_.gps_ephemeris_map.cend();
-                                 gps_eph_iter++)
+                                gps_eph_iter != supl_client_ephemeris_.gps_ephemeris_map.cend();
+                                gps_eph_iter++)
                                 {
                                     std::cout << "SUPL: Received ephemeris data for satellite " << Gnss_Satellite("GPS", gps_eph_iter->second.PRN) << '\n';
                                     const std::shared_ptr<Gps_Ephemeris> tmp_obj = std::make_shared<Gps_Ephemeris>(gps_eph_iter->second);
@@ -849,8 +844,8 @@ void ControlThread::assist_GNSS()
                         {
                             std::map<int, Gps_Almanac>::const_iterator gps_alm_iter;
                             for (gps_alm_iter = supl_client_ephemeris_.gps_almanac_map.cbegin();
-                                 gps_alm_iter != supl_client_ephemeris_.gps_almanac_map.cend();
-                                 gps_alm_iter++)
+                                gps_alm_iter != supl_client_ephemeris_.gps_almanac_map.cend();
+                                gps_alm_iter++)
                                 {
                                     std::cout << "SUPL: Received almanac data for satellite " << Gnss_Satellite("GPS", gps_alm_iter->second.PRN) << '\n';
                                     const std::shared_ptr<Gps_Almanac> tmp_obj = std::make_shared<Gps_Almanac>(gps_alm_iter->second);
@@ -903,8 +898,8 @@ void ControlThread::assist_GNSS()
                         {
                             std::map<int, Gps_Acq_Assist>::const_iterator gps_acq_iter;
                             for (gps_acq_iter = supl_client_acquisition_.gps_acq_map.cbegin();
-                                 gps_acq_iter != supl_client_acquisition_.gps_acq_map.cend();
-                                 gps_acq_iter++)
+                                gps_acq_iter != supl_client_acquisition_.gps_acq_map.cend();
+                                gps_acq_iter++)
                                 {
                                     std::cout << "SUPL: Received acquisition assistance data for satellite " << Gnss_Satellite("GPS", gps_acq_iter->second.PRN) << '\n';
                                     global_gps_acq_assist_map.write(gps_acq_iter->second.PRN, gps_acq_iter->second);
@@ -1049,9 +1044,7 @@ std::vector<std::pair<int, Gnss_Satellite>> ControlThread::get_visible_sats(time
     std::vector<unsigned int> visible_gps;
     std::vector<unsigned int> visible_gal;
     const std::shared_ptr<PvtInterface> pvt_ptr = flowgraph_->get_pvt();
-    struct tm tstruct
-    {
-    };
+    struct tm tstruct{};
     char buf[80];
     tstruct = *gmtime(&rx_utc_time);
     strftime(buf, sizeof(buf), "%d/%m/%Y %H:%M:%S ", &tstruct);
@@ -1214,39 +1207,54 @@ void ControlThread::gps_acq_assist_data_collector() const
 }
 
 
-void ControlThread::sysv_queue_listener()
+void ControlThread::message_queue_listener()
 {
-    typedef struct
-    {
-        long mtype;  // NOLINT(google-runtime-int) required by SysV queue messaging
-        double stop_message;
-    } stop_msgbuf;
-
     bool read_queue = true;
-    stop_msgbuf msg;
     double received_message = 0.0;
-    const int msgrcv_size = sizeof(msg.stop_message);
-
-    const key_t key = 1102;
-
-    if ((msqid_ = msgget(key, 0644 | IPC_CREAT)) == -1)
+    try
         {
-            std::cerr << "GNSS-SDR cannot create SysV message queues\n";
-            read_queue = false;
-        }
+            // Remove any existing queue with the same name
+            boost::interprocess::message_queue::remove(control_message_queue_name_.c_str());
 
-    while (read_queue && !stop_)
-        {
-            if (msgrcv(msqid_, &msg, msgrcv_size, 1, 0) != -1)
+            // Create a new message queue
+            auto mq = std::make_unique<boost::interprocess::message_queue>(
+                boost::interprocess::create_only,     // Create a new queue
+                control_message_queue_name_.c_str(),  // Queue name
+                10,                                   // Maximum number of messages
+                sizeof(double)                        // Maximum message size
+            );
+
+            while (read_queue && !stop_)
                 {
-                    received_message = msg.stop_message;
-                    if ((std::abs(received_message - (-200.0)) < 10 * std::numeric_limits<double>::epsilon()))
+                    unsigned int priority;
+                    std::size_t received_size;
+                    // Receive a message (non-blocking)
+                    if (mq->try_receive(&received_message, sizeof(received_message), received_size, priority))
                         {
-                            std::cout << "Quit order received, stopping GNSS-SDR !!\n";
-                            control_queue_->push(pmt::make_any(command_event_make(200, 0)));
-                            read_queue = false;
+                            // Validate the size of the received message
+                            if (received_size == sizeof(double))
+                                {
+                                    if (std::abs(received_message - (-200.0)) < 10 * std::numeric_limits<double>::epsilon())
+                                        {
+                                            std::cout << "Quit order received, stopping GNSS-SDR !!\n";
+
+                                            // Push the control command to the control queue
+                                            control_queue_->push(pmt::make_any(command_event_make(200, 0)));
+                                            read_queue = false;
+                                        }
+                                }
+                        }
+                    else
+                        {
+                            // No message available, add a small delay to prevent busy-waiting
+                            std::this_thread::sleep_for(std::chrono::milliseconds(200));
                         }
                 }
+        }
+    catch (const boost::interprocess::interprocess_exception &e)
+        {
+            std::cerr << "Error in message queue listener: " << e.what() << '\n';
+            read_queue = false;
         }
 }
 

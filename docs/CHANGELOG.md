@@ -62,6 +62,7 @@ All notable changes to GNSS-SDR will be documented in this file.
 
 - Updated GSL implementation to v0.42.0. See the
   [gsl-lite release](https://github.com/gsl-lite/gsl-lite/releases/tag/v0.42.0).
+- Code formatting now based on clang-format 19.
 
 ### Improvements in Portability:
 
@@ -105,6 +106,8 @@ All notable changes to GNSS-SDR will be documented in this file.
   transitioned to the Apache License 2.0, fully compatible with GPL v3.0.
   Accordingly, the GNSS-SDR building system now looks for OpenSSL in the first
   place and, if not found, then it looks for GnuTLS as a fallback.
+- Allow linking against Boost 1.87.0.
+- Replace the System V queues by boost::interprocess, improving portability.
 
 ### Reliability
 
