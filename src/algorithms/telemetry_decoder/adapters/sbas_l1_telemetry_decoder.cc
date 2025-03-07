@@ -18,6 +18,7 @@
 
 #include "sbas_l1_telemetry_decoder.h"
 #include "configuration_interface.h"
+#include <utility>
 
 #if USE_GLOG_AND_GFLAGS
 #include <glog/logging.h>

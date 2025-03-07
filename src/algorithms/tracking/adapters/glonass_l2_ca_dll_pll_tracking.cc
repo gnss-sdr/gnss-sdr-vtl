@@ -24,6 +24,7 @@
 #include "GLONASS_L1_L2_CA.h"
 #include "configuration_interface.h"
 #include "gnss_sdr_flags.h"
+#include <utility>
 
 #if USE_GLOG_AND_GFLAGS
 #include <glog/logging.h>

@@ -19,6 +19,7 @@
 #include "configuration_interface.h"
 #include "notch_cc.h"
 #include <boost/lexical_cast.hpp>
+#include <utility>
 
 #if USE_GLOG_AND_GFLAGS
 #include <glog/logging.h>

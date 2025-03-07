@@ -20,6 +20,7 @@
 #include "notch_lite_cc.h"
 #include <boost/lexical_cast.hpp>
 #include <algorithm>  // for max
+#include <utility>
 
 #if USE_GLOG_AND_GFLAGS
 #include <glog/logging.h>

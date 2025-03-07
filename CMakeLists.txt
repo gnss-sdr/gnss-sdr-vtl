@@ -1,7 +1,7 @@
 # GNSS-SDR is a Global Navigation Satellite System software-defined receiver.
 # This file is part of GNSS-SDR.
 #
-# SPDX-FileCopyrightText: 2010-2024 C. Fernandez-Prades cfernandez(at)cttc.es
+# SPDX-FileCopyrightText: 2010-2025 C. Fernandez-Prades cfernandez(at)cttc.es
 # SPDX-License-Identifier: BSD-3-Clause
 
 ################################################################################
@@ -28,7 +28,6 @@ list(APPEND CMAKE_MODULE_PATH ${GNSSSDR_SOURCE_DIR}/cmake/Modules)
 # Enable them at the command line by doing 'cmake -DENABLE_XXX=ON ..'
 ################################################################################
 include(FeatureSummary)
-include(GnsssdrLibPaths)
 
 # Support of optional RF front-ends
 option(ENABLE_UHD "Enable the use of UHD (driver for all USRP devices)" ON)
@@ -360,9 +359,9 @@ set(GNSSSDR_ARMADILLO_LOCAL_VERSION "14.2.x")
 set(GNSSSDR_GFLAGS_LOCAL_VERSION "2.2.2")
 set(GNSSSDR_GLOG_LOCAL_VERSION "0.7.1")
 set(GNSSSDR_MATIO_LOCAL_VERSION "1.5.28")
-set(GNSSSDR_PROTOCOLBUFFERS_LOCAL_VERSION "29.2")
-set(GNSSSDR_PUGIXML_LOCAL_VERSION "1.14")
-set(GNSSSDR_GTEST_LOCAL_VERSION "1.15.2")
+set(GNSSSDR_PROTOCOLBUFFERS_LOCAL_VERSION "30.0")
+set(GNSSSDR_PUGIXML_LOCAL_VERSION "1.15")
+set(GNSSSDR_GTEST_LOCAL_VERSION "1.16.0")
 set(GNSSSDR_GNSS_SIM_LOCAL_VERSION "origin/master")
 set(GNSSSDR_GNSSTK_LOCAL_VERSION "14.3.0")
 set(GNSSSDR_BENCHMARK_LOCAL_VERSION "1.9.1")
@@ -397,6 +396,9 @@ if(CMAKE_VERSION VERSION_LESS "3.4")
     set(GNSSSDR_PUGIXML_LOCAL_VERSION "1.10")
 endif()
 
+if(CMAKE_VERSION VERSION_LESS "3.16")
+    set(GNSSSDR_PROTOCOLBUFFERS_LOCAL_VERSION "29.3")
+endif()
 if(CMAKE_CROSSCOMPILING OR CMAKE_VERSION VERSION_LESS "3.13" OR
   ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8.0.0)) OR
   ((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") AND (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")) OR
@@ -404,6 +406,9 @@ if(CMAKE_CROSSCOMPILING OR CMAKE_VERSION VERSION_LESS "3.13" OR
     set(GNSSSDR_PROTOCOLBUFFERS_LOCAL_VERSION "21.12")
 endif()
 
+if(CMAKE_VERSION VERSION_LESS "3.16")
+    set(GNSSSDR_GTEST_LOCAL_VERSION "1.15.2")
+endif()
 if(CMAKE_VERSION VERSION_LESS "3.13" OR
   (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.3.1) OR
   (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0.0))
@@ -609,6 +614,13 @@ set_package_properties(Threads PROPERTIES
 
 
 ################################################################################
+# Set GNSSSDR_LIB_PATHS and GNSSSDR_INCLUDE_PATHS
+################################################################################
+include(GnsssdrFindPaths)
+
+
+
+################################################################################
 # Googletest - https://github.com/google/googletest
 ################################################################################
 enable_testing()
@@ -752,6 +764,18 @@ endif()
 if(UNIX AND EXISTS "/usr/lib64")
     list(APPEND BOOST_LIBRARYDIR "/usr/lib64") # Fedora 64-bit fix
 endif()
+if(NOT BOOST_ROOT)
+    # Workaround for Macports
+    if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+        if(${DETECT_MACPORTS} EQUAL 0)
+            if(EXISTS "${MACPORTS_PREFIX}/libexec/boost/1.76")
+                set(BOOST_ROOT "${MACPORTS_PREFIX}/libexec/boost/1.76")
+            elseif(EXISTS "${MACPORTS_PREFIX}/libexec/boost/1.71")
+                set(BOOST_ROOT "${MACPORTS_PREFIX}/libexec/boost/1.71")
+            endif()
+        endif()
+    endif()
+endif()
 # Boost_ADDITIONAL_VERSIONS is only used internally by cmake to know the
 # formation of newer versions. No need to increase, not used anymore since newer
 # Boost provides its own CMake configuration files.
@@ -771,7 +795,10 @@ if(CMAKE_VERSION VERSION_LESS 3.30)
     find_package(Boost ${GNSSSDR_BOOST_MIN_VERSION} COMPONENTS ${BOOST_COMPONENTS} REQUIRED)
 else()
     find_package(Boost ${GNSSSDR_BOOST_MIN_VERSION} COMPONENTS ${BOOST_COMPONENTS})
-    if(NOT Boost_FOUND)
+    if(Boost_FOUND)
+        get_filename_component(BOOST_PREFIX ${Boost_INCLUDE_DIRS} DIRECTORY)
+        message(STATUS "Found Boost v${Boost_VERSION_STRING} at ${BOOST_PREFIX}")
+    else()
         message(STATUS "Trying deprecated FindBoost Module ...")
         if(POLICY CMP0167)
             cmake_policy(SET CMP0167 OLD)
@@ -1280,9 +1307,6 @@ if(NOT VOLKGNSSSDR_FOUND)
     CMAKE_SYSTEM_PROCESSOR MATCHES "^loongarch")
         set(SUPPORTED_CPU_FEATURES_ARCH TRUE)
     endif()
-    if(${CMAKE_INSTALL_LIBDIR} MATCHES lib64)
-        set(VOLK_GNSSSDR_LIB_SUFFIX 64)
-    endif()
     if(CMAKE_VERSION VERSION_LESS 3.2)
         ExternalProject_Add(volk_gnsssdr_module
             PREFIX ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module
@@ -1300,7 +1324,7 @@ if(NOT VOLKGNSSSDR_FOUND)
     else()
         if(SUPPORTED_CPU_FEATURES_ARCH)
             set(VOLK_GNSSSDR_BUILD_BYPRODUCTS
-                ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/lib${VOLK_GNSSSDR_LIB_SUFFIX}/${CMAKE_FIND_LIBRARY_PREFIXES}volk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX}
+                ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/${CMAKE_INSTALL_LIBDIR}/${CMAKE_FIND_LIBRARY_PREFIXES}volk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX}
                 ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/bin/volk_gnsssdr_profile
             )
             if(ENABLE_CPUFEATURES)
@@ -1323,7 +1347,7 @@ if(NOT VOLKGNSSSDR_FOUND)
                 set_package_properties(CPUFEATURES PROPERTIES
                     DESCRIPTION "A cross platform C99 library to get CPU features at runtime"
                 )
-                if((DEFINED VOLK_VERSION AND VOLK_VERSION VERSION_GREATER "2.3") OR (CMAKE_VERSION VERSION_LESS "3.13")) # avoid clash with volk's cpufeatures.
+                if((DEFINED VOLK_VERSION AND VOLK_VERSION VERSION_GREATER "2.3" AND VOLK_VERSION VERSION_LESS "3.1") OR (CMAKE_VERSION VERSION_LESS "3.13")) # avoid clash with volk's cpufeatures.
                     set(ENABLE_CPUFEATURES OFF)
                 else()
                     set_package_properties(CPUFEATURES PROPERTIES
@@ -1368,7 +1392,7 @@ if(NOT VOLKGNSSSDR_FOUND)
                 UPDATE_COMMAND ""
                 PATCH_COMMAND ""
                 BUILD_COMMAND ${VOLK_GNSSSDR_BUILD_COMMAND}
-                BUILD_BYPRODUCTS ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/lib${VOLK_GNSSSDR_LIB_SUFFIX}/${CMAKE_FIND_LIBRARY_PREFIXES}volk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX}
+                BUILD_BYPRODUCTS ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/${CMAKE_INSTALL_LIBDIR}/${CMAKE_FIND_LIBRARY_PREFIXES}volk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX}
                     ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/bin/volk_gnsssdr_profile
                     ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/bin/volk_gnsssdr-config-info
                 INSTALL_DIR ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install
@@ -1382,7 +1406,7 @@ if(NOT VOLKGNSSSDR_FOUND)
     endif()
 
     add_library(volk_gnsssdr UNKNOWN IMPORTED)
-    set_property(TARGET volk_gnsssdr PROPERTY IMPORTED_LOCATION ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/lib${VOLK_GNSSSDR_LIB_SUFFIX}/libvolk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX})
+    set_property(TARGET volk_gnsssdr PROPERTY IMPORTED_LOCATION ${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/${CMAKE_INSTALL_LIBDIR}/libvolk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX})
     set(VOLK_GNSSSDR_INCLUDE_DIRS "${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/build/include/;${GNSSSDR_SOURCE_DIR}/src/algorithms/libs/volk_gnsssdr_module/volk_gnsssdr/include;${ORC_INCLUDE_DIRS}")
     set(VOLK_GNSSSDR_LIBRARIES volk_gnsssdr ${ORC_LIBRARIES_STATIC})
     if(CPUFEATURES_FOUND)
@@ -1395,7 +1419,7 @@ if(NOT VOLKGNSSSDR_FOUND)
         add_dependencies(Volkgnsssdr::volkgnsssdr volk_gnsssdr_module)
         set_target_properties(Volkgnsssdr::volkgnsssdr PROPERTIES
             IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
-            IMPORTED_LOCATION "${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/lib${VOLK_GNSSSDR_LIB_SUFFIX}/libvolk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX}"
+            IMPORTED_LOCATION "${GNSSSDR_BINARY_DIR}/volk_gnsssdr_module/install/${CMAKE_INSTALL_LIBDIR}/libvolk_gnsssdr${CMAKE_STATIC_LIBRARY_SUFFIX}"
             INCLUDE_DIRECTORIES "${VOLK_GNSSSDR_INCLUDE_DIRS}"
             INTERFACE_INCLUDE_DIRECTORIES "${VOLK_GNSSSDR_INCLUDE_DIRS}"
             INTERFACE_LINK_LIBRARIES "${VOLK_GNSSSDR_LIBRARIES}"
@@ -1505,8 +1529,8 @@ if(NOT CMAKE_VERSION VERSION_LESS 3.24
     endif()
 endif()
 
-# Workaround for Clang 18
-if(absl_FOUND AND absl_VERSION AND ("${absl_VERSION}" VERSION_LESS "20240722"))
+# Workaround for Clang 18+
+if(absl_FOUND AND NOT ENABLE_OWN_ABSEIL)
     if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") AND NOT (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "17.99"))
         add_compile_options(-fclang-abi-compat=17)
     endif()
@@ -2213,21 +2237,21 @@ if(NOT ARMADILLO_FOUND OR ENABLE_OWN_ARMADILLO)
     # Fix for macOS
     find_library(ARPACK_LIBRARY
         NAMES arpack
-        PATHS ${CMAKE_SYSTEM_LIBRARY_PATH} /opt/local/lib /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib /opt/local/lib64
+        PATHS ${CMAKE_SYSTEM_LIBRARY_PATH} ${GNSSSDR_LIB_PATHS}
     )
     if(ARPACK_LIBRARY)
         target_link_libraries(Armadillo::armadillo INTERFACE ${ARPACK_LIBRARY})
     endif()
     find_library(FLEXIBLAS_LIBRARY
         NAMES flexiblas
-        PATHS ${CMAKE_SYSTEM_LIBRARY_PATH} /opt/local/lib /lib64 /lib /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib /opt/local/lib64
+        PATHS ${CMAKE_SYSTEM_LIBRARY_PATH} ${GNSSSDR_LIB_PATHS}
     )
     if(FLEXIBLAS_LIBRARY)
         target_link_libraries(Armadillo::armadillo INTERFACE ${FLEXIBLAS_LIBRARY})
     endif()
     find_library(SUPERLU_LIBRARY
         NAMES superlu
-        PATHS ${CMAKE_SYSTEM_LIBRARY_PATH} /opt/local/lib /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib /opt/local/lib64
+        PATHS ${CMAKE_SYSTEM_LIBRARY_PATH} ${GNSSSDR_LIB_PATHS}
     )
     if(SUPERLU_LIBRARY)
         target_link_libraries(Armadillo::armadillo INTERFACE ${SUPERLU_LIBRARY})
@@ -2354,23 +2378,23 @@ if(NOT MATIO_FOUND OR MATIO_VERSION_STRING VERSION_LESS ${GNSSSDR_MATIO_MIN_VERS
         endif()
 
         if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-            if((NOT EXISTS /usr/local/bin/glibtoolize AND NOT EXISTS /opt/local/bin/glibtoolize) OR
-                (NOT EXISTS /usr/local/bin/aclocal AND NOT EXISTS /opt/local/bin/aclocal))
+            if((NOT EXISTS /usr/local/bin/glibtoolize AND NOT EXISTS ${MACOS_PACKAGES_PREFIX}/bin/glibtoolize) OR
+                (NOT EXISTS /usr/local/bin/aclocal AND NOT EXISTS ${MACOS_PACKAGES_PREFIX}/bin/aclocal))
                 message(" libtool/automake tools have not been found.")
                 message(" You can try to install them by typing:")
                 message(" 'sudo port install libtool automake', if you use Macports, or 'brew install libtool automake', if you use Homebrew")
                 message(FATAL_ERROR "libtool/automake tools are required to build matio from source")
             endif()
             if(CMAKE_GENERATOR STREQUAL Xcode)
-                if(EXISTS /opt/local/bin/glibtoolize OR EXISTS /opt/local/bin/aclocal)
+                if(EXISTS ${MACOS_PACKAGES_PREFIX}/bin/glibtoolize OR EXISTS ${MACOS_PACKAGES_PREFIX}/bin/aclocal)
                     if(NOT EXISTS /usr/local/bin/glibtoolize OR NOT EXISTS /usr/local/bin/aclocal)
                         message(" WARNING: libtool/atomake binaries cannot be found by Xcode. Please do:")
-                        message("sudo ln -s /opt/local/bin/glibtoolize /usr/local/bin/")
-                        message("sudo ln -s /opt/local/bin/aclocal /usr/local/bin/")
-                        message("sudo ln -s /opt/local/bin/autom4te /usr/local/bin/")
-                        message("sudo ln -s /opt/local/bin/automake /usr/local/bin/")
-                        message("sudo ln -s /opt/local/bin/autoconf /usr/local/bin/")
-                        message("sudo ln -s /opt/local/bin/autoreconf /usr/local/bin/")  # not needed by Matio, but by Protocol Buffers
+                        message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/glibtoolize /usr/local/bin/")
+                        message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/aclocal /usr/local/bin/")
+                        message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/autom4te /usr/local/bin/")
+                        message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/automake /usr/local/bin/")
+                        message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/autoconf /usr/local/bin/")
+                        message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/autoreconf /usr/local/bin/")  # not needed by Matio, but by Protocol Buffers
                         message(FATAL_ERROR "libtool/automake tools cannot be found by Xcode")
                     endif()
                 endif()
@@ -2381,8 +2405,8 @@ if(NOT MATIO_FOUND OR MATIO_VERSION_STRING VERSION_LESS ${GNSSSDR_MATIO_MIN_VERS
         get_filename_component(HDF5_BASE_DIR2 ${HDF5_FIRST_DIR} DIRECTORY)
         get_filename_component(HDF5_BASE_DIR ${HDF5_BASE_DIR2} DIRECTORY)
         if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-            if(EXISTS /opt/local/include/hdf5.h)
-                set(HDF5_BASE_DIR /opt/local)
+            if(EXISTS ${MACOS_PACKAGES_PREFIX}/include/hdf5.h)
+                set(HDF5_BASE_DIR ${MACOS_PACKAGES_PREFIX})
             endif()
             if(EXISTS /usr/local/include/hdf5.h)
                 set(HDF5_BASE_DIR /usr/local)
@@ -2764,23 +2788,23 @@ if((NOT Protobuf_FOUND) OR (NOT Protobuf_PROTOC_EXECUTABLE) OR (${Protobuf_VERSI
                 endif()
             endif()
             if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-                if((NOT EXISTS /usr/local/bin/glibtoolize AND NOT EXISTS /opt/local/bin/glibtoolize) OR
-                    (NOT EXISTS /usr/local/bin/aclocal AND NOT EXISTS /opt/local/bin/aclocal))
+                if((NOT EXISTS /usr/local/bin/glibtoolize AND NOT EXISTS ${MACOS_PACKAGES_PREFIX}/bin/glibtoolize) OR
+                    (NOT EXISTS /usr/local/bin/aclocal AND NOT EXISTS ${MACOS_PACKAGES_PREFIX}/bin/aclocal))
                     message(" libtool/automake tools have not been found.")
                     message(" You can try to install them by typing:")
                     message(" 'sudo port install libtool automake', if you use Macports, or 'brew install libtool automake', if you use Homebrew")
                     message(FATAL_ERROR "libtool/automake tools are required to build Protocol Buffers from source")
                 endif()
                 if(CMAKE_GENERATOR STREQUAL Xcode)
-                    if(EXISTS /opt/local/bin/glibtoolize OR EXISTS /opt/local/bin/aclocal)
+                    if(EXISTS ${MACOS_PACKAGES_PREFIX}/bin/glibtoolize OR EXISTS ${MACOS_PACKAGES_PREFIX}/bin/aclocal)
                         if(NOT EXISTS /usr/local/bin/glibtoolize OR NOT EXISTS /usr/local/bin/aclocal)
                             message(" WARNING: libtool/automake binaries cannot be found by Xcode. Please do:")
-                            message("sudo ln -s /opt/local/bin/glibtoolize /usr/local/bin/")
-                            message("sudo ln -s /opt/local/bin/aclocal /usr/local/bin/")
-                            message("sudo ln -s /opt/local/bin/autom4te /usr/local/bin/")
-                            message("sudo ln -s /opt/local/bin/automake /usr/local/bin/")
-                            message("sudo ln -s /opt/local/bin/autoconf /usr/local/bin/")
-                            message("sudo ln -s /opt/local/bin/autoreconf /usr/local/bin/")
+                            message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/glibtoolize /usr/local/bin/")
+                            message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/aclocal /usr/local/bin/")
+                            message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/autom4te /usr/local/bin/")
+                            message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/automake /usr/local/bin/")
+                            message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/autoconf /usr/local/bin/")
+                            message("sudo ln -s ${MACOS_PACKAGES_PREFIX}/bin/autoreconf /usr/local/bin/")
                             message(FATAL_ERROR "libtool/automake tools cannot be found by Xcode")
                         endif()
                     endif()
@@ -3696,6 +3720,12 @@ else()
     endif()
     if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
         message(STATUS "Building on ${MACOS_DISTRIBUTION}")
+        if(${DETECT_MACPORTS} EQUAL 0)
+            message(STATUS "Found Macports v${MACPORTS_VERSION} installed at ${MACPORTS_PREFIX}")
+        endif()
+        if(${DETECT_HOMEBREW} EQUAL 0)
+            message(STATUS "Found Homebrew v${HOMEBREW_VERSION} installed at ${HOMEBREW_PREFIX}")
+        endif()
     endif()
 endif()
 message(STATUS "CMake version: ${CMAKE_VERSION}")

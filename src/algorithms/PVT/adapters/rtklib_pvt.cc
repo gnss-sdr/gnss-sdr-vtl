@@ -27,6 +27,7 @@
 #include "pvt_conf.h"                  // for Pvt_Conf
 #include "rtklib_rtkpos.h"             // for rtkfree, rtkinit
 #include <iostream>                    // for std::cout
+#include <utility>                     // for std::move
 #if USE_GLOG_AND_GFLAGS
 #include <glog/logging.h>
 #else

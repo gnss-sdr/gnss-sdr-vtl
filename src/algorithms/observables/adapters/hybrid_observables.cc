@@ -20,6 +20,7 @@
 #include "gnss_sdr_flags.h"
 #include "obs_conf.h"
 #include <ostream>  // for operator<<
+#include <utility>
 
 #if USE_GLOG_AND_GFLAGS
 #include <glog/logging.h>
