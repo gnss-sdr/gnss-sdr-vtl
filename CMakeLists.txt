@@ -16,7 +16,7 @@ endif()
 # Build type can still be overridden by setting -DCMAKE_BUILD_TYPE=
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "")
 
-cmake_minimum_required(VERSION 2.8.12...3.31)
+cmake_minimum_required(VERSION 2.8.12...4.0)
 project(gnss-sdr CXX C)
 
 set(GNSSSDR_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}) # Allows to be a sub-project
@@ -197,9 +197,9 @@ endif()
 set(VERSION_INFO_MAJOR_VERSION 0)
 set(VERSION_INFO_API_COMPAT 0)
 if(${THIS_IS_A_RELEASE})
-    set(VERSION_INFO_MINOR_VERSION 19)
+    set(VERSION_INFO_MINOR_VERSION 20)
 else()
-    set(VERSION_INFO_MINOR_VERSION 19.git-${GIT_BRANCH}-${GIT_COMMIT_HASH})
+    set(VERSION_INFO_MINOR_VERSION 20.git-${GIT_BRANCH}-${GIT_COMMIT_HASH})
 endif()
 
 set(VERSION ${VERSION_INFO_MAJOR_VERSION}.${VERSION_INFO_API_COMPAT}.${VERSION_INFO_MINOR_VERSION})
@@ -355,16 +355,16 @@ set(GNSSSDR_ABSEIL_MIN_VERSION "20240116")
 ################################################################################
 # Versions to download and build (but not to install system-wide) if not found
 ################################################################################
-set(GNSSSDR_ARMADILLO_LOCAL_VERSION "14.2.x")
+set(GNSSSDR_ARMADILLO_LOCAL_VERSION "14.4.x")
 set(GNSSSDR_GFLAGS_LOCAL_VERSION "2.2.2")
 set(GNSSSDR_GLOG_LOCAL_VERSION "0.7.1")
 set(GNSSSDR_MATIO_LOCAL_VERSION "1.5.28")
-set(GNSSSDR_PROTOCOLBUFFERS_LOCAL_VERSION "30.0")
+set(GNSSSDR_PROTOCOLBUFFERS_LOCAL_VERSION "30.2")
 set(GNSSSDR_PUGIXML_LOCAL_VERSION "1.15")
 set(GNSSSDR_GTEST_LOCAL_VERSION "1.16.0")
 set(GNSSSDR_GNSS_SIM_LOCAL_VERSION "origin/master")
 set(GNSSSDR_GNSSTK_LOCAL_VERSION "14.3.0")
-set(GNSSSDR_BENCHMARK_LOCAL_VERSION "1.9.1")
+set(GNSSSDR_BENCHMARK_LOCAL_VERSION "1.9.2")
 set(GNSSSDR_MATHJAX_EXTERNAL_VERSION "2.7.7")
 set(GNSSSDR_ABSL_LOCAL_VERSION "origin/master") # live at head (see https://abseil.io/about/releases)
 
@@ -1155,7 +1155,7 @@ if(NOT VOLKGNSSSDR_FOUND)
             elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                 message(STATUS " sudo zypper install ${PYTHON_NAME}-Mako")
             else()
-                message(STATUS " sudo apt-get install ${PYTHON_NAME}-mako")
+                message(STATUS " sudo apt install ${PYTHON_NAME}-mako")
             endif()
         endif()
         message(FATAL_ERROR "Mako templates required to build VOLK_GNSSSDR")
@@ -1172,7 +1172,7 @@ if(NOT VOLKGNSSSDR_FOUND)
                 elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                     message(STATUS " sudo zypper install ${PYTHON_NAME}-six")
                 else()
-                    message(STATUS " sudo apt-get install ${PYTHON_NAME}-six")
+                    message(STATUS " sudo apt install ${PYTHON_NAME}-six")
                 endif()
             endif()
             message(FATAL_ERROR "six - python 2 and 3 compatibility library required to build VOLK_GNSSSDR")
@@ -1610,16 +1610,37 @@ if(NOT absl_FOUND)
             if((CMAKE_VERSION VERSION_GREATER 3.12.0) AND NOT (CMAKE_GENERATOR STREQUAL Xcode))
                 set(PARALLEL_BUILD "--parallel 2")
             endif()
-            ExternalProject_Add(gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
+            if(CMAKE_VERSION VERSION_LESS 4.0)
+                ExternalProject_Add(gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
+                    PREFIX ${GNSSSDR_BINARY_DIR}/gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
+                    GIT_REPOSITORY https://github.com/gflags/gflags.git
+                    GIT_TAG v${GNSSSDR_GFLAGS_LOCAL_VERSION}
+                    SOURCE_DIR ${GNSSSDR_BINARY_DIR}/thirdparty/gflags/gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
+                    BINARY_DIR ${GNSSSDR_BINARY_DIR}/gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
+                    CMAKE_ARGS -DBUILD_SHARED_LIBS=OFF
+                        -DBUILD_STATIC_LIBS=ON
+                        -DBUILD_gflags_LIB=ON
+                        -DBUILD_gflags_nothreads_LIB=ON
+                        -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+                        ${GFLAGS_TOOLCHAIN_FILE}
+                        -DCMAKE_BUILD_TYPE=$<$<CONFIG:Debug>:Debug>$<$<CONFIG:Release>:Release>$<$<CONFIG:RelWithDebInfo>:RelWithDebInfo>$<$<CONFIG:MinSizeRel>:MinSizeRel>$<$<CONFIG:NoOptWithASM>:Debug>$<$<CONFIG:Coverage>:Debug>$<$<CONFIG:O2WithASM>:RelWithDebInfo>$<$<CONFIG:O3WithASM>:RelWithDebInfo>$<$<CONFIG:ASAN>:Debug>
+                    BUILD_COMMAND "${GFLAGS_BUILD_COMMAND} ${PARALLEL_BUILD}"
+                    BUILD_BYPRODUCTS ${GFLAGS_BUILD_BYPRODUCTS}
+                    UPDATE_COMMAND ""
+                    PATCH_COMMAND ""
+                    INSTALL_COMMAND ""
+                )
+                # Note: -DBUILD_gflags_nothreads_LIB=ON is required as a workaround to a bug in gflags 2.2.2. This is fixed in gflags master branch
+            else()
+                ExternalProject_Add(gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
                 PREFIX ${GNSSSDR_BINARY_DIR}/gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
                 GIT_REPOSITORY https://github.com/gflags/gflags.git
-                GIT_TAG v${GNSSSDR_GFLAGS_LOCAL_VERSION}
+                GIT_TAG 52e94563eba1968783864942fedf6e87e3c611f4
                 SOURCE_DIR ${GNSSSDR_BINARY_DIR}/thirdparty/gflags/gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
                 BINARY_DIR ${GNSSSDR_BINARY_DIR}/gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}
                 CMAKE_ARGS -DBUILD_SHARED_LIBS=OFF
                     -DBUILD_STATIC_LIBS=ON
                     -DBUILD_gflags_LIB=ON
-                    -DBUILD_gflags_nothreads_LIB=ON
                     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                     ${GFLAGS_TOOLCHAIN_FILE}
                     -DCMAKE_BUILD_TYPE=$<$<CONFIG:Debug>:Debug>$<$<CONFIG:Release>:Release>$<$<CONFIG:RelWithDebInfo>:RelWithDebInfo>$<$<CONFIG:MinSizeRel>:MinSizeRel>$<$<CONFIG:NoOptWithASM>:Debug>$<$<CONFIG:Coverage>:Debug>$<$<CONFIG:O2WithASM>:RelWithDebInfo>$<$<CONFIG:O3WithASM>:RelWithDebInfo>$<$<CONFIG:ASAN>:Debug>
@@ -1629,8 +1650,8 @@ if(NOT absl_FOUND)
                 PATCH_COMMAND ""
                 INSTALL_COMMAND ""
             )
+            endif()
         endif()
-        # Note: -DBUILD_gflags_nothreads_LIB=ON is required as a workaround to a bug in gflags 2.2.2. This is fixed in gflags master branch
 
         set(GFlags_INCLUDE_DIRS
             ${GNSSSDR_BINARY_DIR}/gflags-${GNSSSDR_GFLAGS_LOCAL_VERSION}/include CACHE PATH "Local Gflags headers"
@@ -1799,7 +1820,7 @@ if(NOT absl_FOUND)
                             elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                                 message(" sudo zypper install automake")
                             else()
-                                message(" sudo apt-get install automake")
+                                message(" sudo apt install automake")
                             endif()
                             message(FATAL_ERROR "aclocal is required to build glog from source")
                         endif()
@@ -1811,7 +1832,7 @@ if(NOT absl_FOUND)
                         elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                             message(" sudo zypper install libtoool")
                         else()
-                            message(" sudo apt-get install libtool")
+                            message(" sudo apt install libtool")
                         endif()
                         message(FATAL_ERROR "libtool is required to build glog from source")
                     endif()
@@ -2014,7 +2035,7 @@ if(NOT BLAS_FOUND)
         if(${LINUX_DISTRIBUTION} MATCHES "Fedora" OR ${LINUX_DISTRIBUTION} MATCHES "Red Hat")
             message(" sudo yum install blas-devel")
         else()
-            message(" sudo apt-get install libblas-dev")
+            message(" sudo apt install libblas-dev")
         endif()
     endif()
     message(FATAL_ERROR "BLAS is required to build gnss-sdr")
@@ -2051,7 +2072,7 @@ if(NOT LAPACK_FOUND)
         elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
             message(" sudo zypper install lapack-devel")
         else()
-            message(" sudo apt-get install liblapack-dev")
+            message(" sudo apt install liblapack-dev")
         endif()
     endif()
     message(FATAL_ERROR "LAPACK is required to build gnss-sdr")
@@ -2130,7 +2151,7 @@ if(NOT ARMADILLO_FOUND OR ENABLE_OWN_ARMADILLO)
             elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                 message(STATUS " sudo zypper install gcc-fortran")
             else()
-                message(STATUS " sudo apt-get install gfortran")
+                message(STATUS " sudo apt install gfortran")
             endif()
             message(FATAL_ERROR "gfortran is required to build gnss-sdr")
         endif()
@@ -2334,7 +2355,7 @@ if(NOT MATIO_FOUND OR MATIO_VERSION_STRING VERSION_LESS ${GNSSSDR_MATIO_MIN_VERS
             elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                 message(STATUS " sudo zypper install hdf5-devel")
             else()
-                message(STATUS " sudo apt-get install libhdf5-dev")
+                message(STATUS " sudo apt install libhdf5-dev")
             endif()
         endif()
         message(FATAL_ERROR "*** The hdf5 library is required to build Matio from source.")
@@ -2351,7 +2372,7 @@ if(NOT MATIO_FOUND OR MATIO_VERSION_STRING VERSION_LESS ${GNSSSDR_MATIO_MIN_VERS
                 elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                     message(" sudo zypper install libtoool")
                 else()
-                    message(" sudo apt-get install libtool")
+                    message(" sudo apt install libtool")
                 endif()
                 message(FATAL_ERROR "libtool is required to build matio from source.")
             endif()
@@ -2371,7 +2392,7 @@ if(NOT MATIO_FOUND OR MATIO_VERSION_STRING VERSION_LESS ${GNSSSDR_MATIO_MIN_VERS
                 elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                     message(" sudo zypper install automake")
                 else()
-                    message(" sudo apt-get install automake")
+                    message(" sudo apt install automake")
                 endif()
                 message(FATAL_ERROR "aclocal is required to build matio from source.")
             endif()
@@ -2762,7 +2783,7 @@ if((NOT Protobuf_FOUND) OR (NOT Protobuf_PROTOC_EXECUTABLE) OR (${Protobuf_VERSI
                     elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                         message(" sudo zypper install libtoool")
                     else()
-                        message(" sudo apt-get install libtool")
+                        message(" sudo apt install libtool")
                     endif()
                     message(FATAL_ERROR "libtool is required to build Protocol Buffers from source")
                 endif()
@@ -2782,7 +2803,7 @@ if((NOT Protobuf_FOUND) OR (NOT Protobuf_PROTOC_EXECUTABLE) OR (${Protobuf_VERSI
                     elseif(${LINUX_DISTRIBUTION} MATCHES "openSUSE")
                         message(" sudo zypper install automake")
                     else()
-                        message(" sudo apt-get install automake")
+                        message(" sudo apt install automake")
                     endif()
                     message(FATAL_ERROR "aclocal is required to build Protocol Buffers from source")
                 endif()
@@ -3044,7 +3065,7 @@ else()
         if(${LINUX_DISTRIBUTION} MATCHES "Fedora" OR ${LINUX_DISTRIBUTION} MATCHES "Red Hat")
             message(STATUS " or simply by doing 'sudo yum install doxygen-latex'.")
         else()
-            message(STATUS " or simply by doing 'sudo apt-get install doxygen-latex'.")
+            message(STATUS " or simply by doing 'sudo apt install doxygen-latex'.")
         endif()
     endif()
     if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -3329,12 +3350,32 @@ endif()
 if(ENABLE_ION)
     include(FetchContent)
     set(CMAKE_POLICY_DEFAULT_CMP0063 NEW)
+    # Fix for CMake 4.0
+    set(ION_METADATA_PATCH_COMMAND "")
+    if(NOT CMAKE_VERSION VERSION_LESS 4.0)
+        find_program(Patch_EXECUTABLE NAME patch PATHS ENV PATH)
+        if(NOT Patch_EXECUTABLE)
+            message(FATAL_ERROR "The patch command is not found. It is required to build the ION GNSS-SDR Metadata Standard. Please check your OS documentation and install the patch command.")
+        endif()
+        set(ION_METADATA_PATCH_COMMAND
+            ${Patch_EXECUTABLE} -p0 -i ${GNSSSDR_SOURCE_DIR}/tests/data/ion_gnss_standard_cmake.patch
+        )
+    endif()
+    # Patch only once
+    if(EXISTS ${GNSSSDR_BINARY_DIR}/thirdparty/gnss-metadata-standard/CMakeLists.txt)
+        set(ION_METADATA_PATCH_COMMAND "")
+    endif()
+    set(NO_WARNING_FLAGS "")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT WIN32)
+        set(NO_WARNING_FLAGS "-DCMAKE_CXX_FLAGS_INIT=-w" "-DCMAKE_C_FLAGS_INIT=-w")
+    endif()
     FetchContent_Declare(
         gnss_metadata_standard
         GIT_REPOSITORY https://github.com/IonMetadataWorkingGroup/GNSS-Metadata-Standard
         GIT_TAG 220d116e10db5e403e21b77a1fa25aa35feda198
         SOURCE_DIR ${GNSSSDR_BINARY_DIR}/thirdparty/gnss-metadata-standard
-        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${GNSSSDR_BINARY_DIR}/gnss-metadata-standard
+        PATCH_COMMAND ${ION_METADATA_PATCH_COMMAND}
+        CMAKE_ARGS ${NO_WARNING_FLAGS} -DCMAKE_INSTALL_PREFIX=${GNSSSDR_BINARY_DIR}/gnss-metadata-standard
         BINARY_DIR ${GNSSSDR_BINARY_DIR}/gnss-metadata-standard
     )
     FetchContent_MakeAvailable(gnss_metadata_standard)

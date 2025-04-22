@@ -18,9 +18,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: install dependencies
         run: |
-          sudo apt-get update -y
+          sudo apt update
           sudo apt install -y libunwind-dev
-          sudo apt-get install -y --no-install-recommends ninja-build cmake \
+          sudo apt install -y --no-install-recommends ninja-build cmake \
           libboost-dev libboost-date-time-dev libboost-system-dev libboost-filesystem-dev \
           libboost-thread-dev libboost-chrono-dev libboost-serialization-dev \
           liblog4cpp5-dev gnuradio-dev gr-osmosdr libpugixml-dev libpcap-dev libblas-dev \
@@ -119,14 +119,15 @@ jobs:
           - 'src'
           - 'tests'
           - 'utils'
+          - 'docs'
     steps:
       - uses: actions/checkout@v4
       - name: run clang-format
-        uses: jidicula/clang-format-action@v4.14.0
+        uses: jidicula/clang-format-action@v4.15.0
         with:
           clang-format-version: "19"
           check-path: ${{ matrix.path }}
-          exclude-regex: '(libs\/gsl\/)|(tmpl)|(cpu_features)|^.*\.(cu|proto)$'
+          exclude-regex: '(libs\/gsl\/)|(tmpl)|(cpu_features)|^.*\.(cu)$'
 
   clang-tidy:
     runs-on: macos-latest
@@ -170,7 +171,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: install dependencies
-        run: sudo apt-get install python3-pip && sudo pip3 install cpplint
+        run: sudo apt install python3-pip && sudo pip3 install cpplint
       - name: run checks
         run: "find ./src/ ./utils ./tests -iname *.h -o -iname *.cc | xargs cpplint
           --filter=-,+build/class,+build/deprecated,+build/explicit_make_pair,\
@@ -299,3 +300,33 @@ jobs:
         uses: docker://fsfe/reuse
         with:
           args: lint
+
+  long-line-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find lines longer than 512 characters
+        run: |
+          set -uo pipefail
+          echo "🔍 Checking for lines with >512 characters ..."
+          FLAG_FILE=$(mktemp) > "$FLAG_FILE"
+          find . \( -name "*.c" -o -name "*.cpp" -o -name "*.cc" -o -name "*.h" -o -name "*.hpp" -o -name "*.py" -o -name "*.txt" -o -name "*.sh" -o -name "*.proto" -o -name "*.yml" \) -print0 \
+            | while IFS= read -r -d '' file; do
+              awk -v fname="$file" 'length($0) > 512 {
+                gsub(/^\.\/?/, "", fname)
+                printf "::error file=%s,line=%d::Line exceeds 512 characters\n", fname, NR
+                print fname ":" NR ": " $0
+              }' "$file" || true
+              if awk 'length($0) > 512 { exit 1 }' "$file"; then
+                :
+              else
+                echo 1 > "$FLAG_FILE"
+              fi
+            done
+          if grep -q 1 "$FLAG_FILE"; then
+            echo "❌ One or more lines exceed 512 characters"
+            exit 1
+          else
+            echo "✅ No long lines found."
+          fi
+          rm -f "$FLAG_FILE"

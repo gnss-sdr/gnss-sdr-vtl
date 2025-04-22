@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: uraimo/run-on-arch-action@v2.7.1
+      - uses: uraimo/run-on-arch-action@v3.0.1
         name: Test in non-x86 container
         continue-on-error: ${{ contains(fromJson('["ppc64le", "s390x"]'), matrix.arch) }}
         id: test
@@ -58,8 +58,8 @@ jobs:
             CXX: ${{ matrix.compiler.cxx }}
           shell: /bin/sh
           install: |
-            apt-get update -q -y
-            apt-get install -q -y ${{ matrix.compiler.name }} git ninja-build cmake \
+            apt update
+            apt install -y ${{ matrix.compiler.name }} git ninja-build cmake \
             libboost-dev libboost-date-time-dev libboost-system-dev libboost-filesystem-dev \
             libboost-thread-dev libboost-chrono-dev libboost-serialization-dev \
             liblog4cpp5-dev gnuradio-dev gr-osmosdr libpugixml-dev libpcap-dev libblas-dev \

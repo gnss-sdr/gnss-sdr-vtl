@@ -8,7 +8,7 @@
 ########################################################################
 # Project setup
 ########################################################################
-cmake_minimum_required(VERSION 2.8.12...3.31)
+cmake_minimum_required(VERSION 2.8.12...4.0)
 set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING "Choose build type: None Debug Release RelWithDebInfo MinSizeRel")
 project(volk_gnsssdr)
 enable_language(CXX)
@@ -206,7 +206,7 @@ message(STATUS "Build type set to ${CMAKE_BUILD_TYPE}.")
 
 set(VERSION_INFO_MAJOR_VERSION 0)
 set(VERSION_INFO_MINOR_VERSION 0)
-set(VERSION_INFO_MAINT_VERSION 19)
+set(VERSION_INFO_MAINT_VERSION 20)
 include(VolkGnsssdrVersion) # setup version info
 include(VolkGnsssdrFindPaths) # set VOLK_GNSSSDR_LIB_PATHS and VOLK_GNSSSDR_INCLUDE_PATHS
 
