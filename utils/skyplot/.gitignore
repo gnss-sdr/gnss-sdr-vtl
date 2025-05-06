@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 Carles Fernandez-Prades <carles.fernandez@cttc.es>
+
+# Temporary/backup files
+*~
+*.bak
+*.tmp
+.DS_Store
+
+# RINEX Navigation files
+*.??n
+*.??p
+*.??P
+*.??g
+*.??G
+*.??h
+*.??H
+*.??q
+*.??Q
+*.??b
+*.??B
+*.??f
+*.??F
+*.??l
+*.??L
+*.rnx
+*.RNX
+
+# RINEX v3+ navigation files
+*_*.*n
+*_*.*N
+*_*.*p
+*_*.*P
+
+# Compressed variants
+*.gz
+*.Z
+*.zip
+
+# Output files
+*.pdf
+*.png
+*.jpg
+*.svg
+*.eps
+*.ps

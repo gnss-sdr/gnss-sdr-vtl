@@ -16,16 +16,14 @@
 #include <cstddef>    // for size_t, ptrdiff_t, nullptr_t
 #include <cstdlib>    // for abort()
 #include <exception>  // for exception, terminate(), uncaught_exceptions()
-#include <ios>        // for ios_base, streamsize
 #include <iosfwd>     // for basic_ostream<>
 #include <limits>
 #include <memory>     // for addressof(), unique_ptr<>, shared_ptr<>
 #include <stdexcept>  // for logic_error
-#include <string>
-#include <utility>  // for move(), forward<>(), swap()
+#include <utility>    // for move(), forward<>(), swap()
 
 #define gsl_lite_MAJOR 0
-#define gsl_lite_MINOR 42
+#define gsl_lite_MINOR 43
 #define gsl_lite_PATCH 0
 
 #define gsl_lite_VERSION gsl_STRINGIFY(gsl_lite_MAJOR) "." gsl_STRINGIFY(gsl_lite_MINOR) "." gsl_STRINGIFY(gsl_lite_PATCH)
@@ -36,7 +34,7 @@
 #define gsl_CONCAT2_(a, b) a##b
 #define gsl_EVALF_(f) f()
 
-// configuration argument checking:
+// Configuration argument checking:
 
 #define gsl_DETAIL_CFG_TOGGLE_VALUE_1 1
 #define gsl_DETAIL_CFG_TOGGLE_VALUE_0 1
@@ -113,6 +111,7 @@
 #if !gsl_CHECK_CFG_NO_VALUE_(GSL_THROW_ON_CONTRACT_VIOLATION)
 #pragma message("invalid configuration value GSL_THROW_ON_CONTRACT_VIOLATION=" gsl_STRINGIFY(GSL_THROW_ON_CONTRACT_VIOLATION) "; macro must be defined without value")
 #endif
+#pragma message("do not use legacy M-GSL configuration macro GSL_THROW_ON_CONTRACT_VIOLATION to configure gsl-lite; define gsl_CONFIG_CONTRACT_VIOLATION_THROWS instead")
 #define gsl_CONFIG_CONTRACT_VIOLATION_THROWS
 #endif
 
@@ -120,6 +119,7 @@
 #if !gsl_CHECK_CFG_NO_VALUE_(GSL_TERMINATE_ON_CONTRACT_VIOLATION)
 #pragma message("invalid configuration value GSL_TERMINATE_ON_CONTRACT_VIOLATION=" gsl_STRINGIFY(GSL_TERMINATE_ON_CONTRACT_VIOLATION) "; macro must be defined without value")
 #endif
+#pragma message("do not use legacy M-GSL configuration macro GSL_TERMINATE_ON_CONTRACT_VIOLATION to configure gsl-lite; define gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES instead")
 #define gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES
 #endif
 
@@ -127,6 +127,7 @@
 #if !gsl_CHECK_CFG_NO_VALUE_(GSL_UNENFORCED_ON_CONTRACT_VIOLATION)
 #pragma message("invalid configuration value GSL_UNENFORCED_ON_CONTRACT_VIOLATION=" gsl_STRINGIFY(GSL_UNENFORCED_ON_CONTRACT_VIOLATION) "; macro must be defined without value")
 #endif
+#pragma message("do not use legacy M-GSL configuration macro GSL_UNENFORCED_ON_CONTRACT_VIOLATION to configure gsl-lite; define gsl_CONFIG_CONTRACT_CHECKING_OFF instead")
 #define gsl_CONFIG_CONTRACT_CHECKING_OFF
 #endif
 
@@ -137,7 +138,11 @@
 #pragma message("invalid configuration value gsl_FEATURE_WITH_CONTAINER_TO_STD=" gsl_STRINGIFY(gsl_FEATURE_WITH_CONTAINER_TO_STD) ", must be 98, 3, 11, 14, 17, or 20")
 #endif
 #else
-#define gsl_FEATURE_WITH_CONTAINER_TO_STD 99  // default
+#if gsl_CONFIG_DEFAULTS_VERSION >= 1
+#define gsl_FEATURE_WITH_CONTAINER_TO_STD 0   // version-1 default
+#else                                         // gsl_CONFIG_DEFAULTS_VERSION == 0
+#define gsl_FEATURE_WITH_CONTAINER_TO_STD 99  // version-0 default
+#endif                                        // gsl_CONFIG_DEFAULTS_VERSION >= 1
 #endif
 #define gsl_FEATURE_WITH_CONTAINER_TO_STD_() gsl_FEATURE_WITH_CONTAINER_TO_STD
 
@@ -177,14 +182,23 @@
 #endif
 #define gsl_FEATURE_OWNER_MACRO_() gsl_FEATURE_OWNER_MACRO
 
-// #if defined( gsl_FEATURE_STRING_SPAN )
-// # if ! gsl_CHECK_CFG_TOGGLE_VALUE_( gsl_FEATURE_STRING_SPAN )
-// #  pragma message ("invalid configuration value gsl_FEATURE_STRING_SPAN=" gsl_STRINGIFY(gsl_FEATURE_STRING_SPAN) ", must be 0 or 1")
-// # endif
-// #else
-// # define gsl_FEATURE_STRING_SPAN  (gsl_CONFIG_DEFAULTS_VERSION == 0)  // default
-// #endif
-// #define gsl_FEATURE_STRING_SPAN_()  gsl_FEATURE_STRING_SPAN
+#if defined(gsl_FEATURE_STRING_SPAN)
+#if !gsl_CHECK_CFG_TOGGLE_VALUE_(gsl_FEATURE_STRING_SPAN)
+#pragma message("invalid configuration value gsl_FEATURE_STRING_SPAN=" gsl_STRINGIFY(gsl_FEATURE_STRING_SPAN) ", must be 0 or 1")
+#endif
+#else
+#define gsl_FEATURE_STRING_SPAN (gsl_CONFIG_DEFAULTS_VERSION == 0)  // default
+#endif
+#define gsl_FEATURE_STRING_SPAN_() gsl_FEATURE_STRING_SPAN
+
+#if defined(gsl_FEATURE_BYTE)
+#if !gsl_CHECK_CFG_TOGGLE_VALUE_(gsl_FEATURE_BYTE)
+#pragma message("invalid configuration value gsl_FEATURE_BYTE=" gsl_STRINGIFY(gsl_FEATURE_BYTE) ", must be 0 or 1")
+#endif
+#else
+#define gsl_FEATURE_BYTE (gsl_CONFIG_DEFAULTS_VERSION == 0)  // default
+#endif
+#define gsl_FEATURE_BYTE_() gsl_FEATURE_BYTE
 
 #if defined(gsl_FEATURE_EXPERIMENTAL_RETURN_GUARD)
 #if !gsl_CHECK_CFG_TOGGLE_VALUE_(gsl_FEATURE_EXPERIMENTAL_RETURN_GUARD)
@@ -220,7 +234,7 @@
 
 #if !defined(gsl_CONFIG_DEPRECATE_TO_LEVEL)
 #if gsl_CONFIG_DEFAULTS_VERSION >= 1
-#define gsl_CONFIG_DEPRECATE_TO_LEVEL 7
+#define gsl_CONFIG_DEPRECATE_TO_LEVEL 8
 #else
 #define gsl_CONFIG_DEPRECATE_TO_LEVEL 0
 #endif
@@ -461,7 +475,11 @@
 #endif
 #if 0 == defined(gsl_CONFIG_CONTRACT_VIOLATION_THROWS) + defined(gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES) + defined(gsl_CONFIG_CONTRACT_VIOLATION_ASSERTS) + defined(gsl_CONFIG_CONTRACT_VIOLATION_TRAPS) + defined(gsl_CONFIG_CONTRACT_VIOLATION_CALLS_HANDLER)
 // select default
-#define gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES
+#if gsl_CONFIG_DEFAULTS_VERSION >= 1
+#define gsl_CONFIG_CONTRACT_VIOLATION_ASSERTS     // version-1 default
+#else                                             // gsl_CONFIG_DEFAULTS_VERSION == 0
+#define gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES  // version-0 default
+#endif                                            // gsl_CONFIG_DEFAULTS_VERSION >= 1
 #endif
 #if 0 == defined(gsl_CONFIG_DEVICE_CONTRACT_VIOLATION_ASSERTS) + defined(gsl_CONFIG_DEVICE_CONTRACT_VIOLATION_TRAPS) + defined(gsl_CONFIG_DEVICE_CONTRACT_VIOLATION_CALLS_HANDLER)
 // select default
@@ -486,7 +504,7 @@
 #endif
 #endif
 
-// C++ language version detection (C++23 is speculative):
+// C++ language version detection:
 // Note: VC14.0/1900 (VS2015) lacks too much from C++14.
 
 #ifndef gsl_CPLUSPLUS
@@ -508,7 +526,8 @@
 #define gsl_CPP14_OR_GREATER (gsl_CPLUSPLUS >= 201402L)
 #define gsl_CPP17_OR_GREATER (gsl_CPLUSPLUS >= 201703L)
 #define gsl_CPP20_OR_GREATER (gsl_CPLUSPLUS >= 202002L)
-#define gsl_CPP23_OR_GREATER (gsl_CPLUSPLUS > 202002L)  // tentative
+#define gsl_CPP23_OR_GREATER (gsl_CPLUSPLUS >= 202302L)
+#define gsl_CPP26_OR_GREATER (gsl_CPLUSPLUS > 202302L)  // not finalized yet
 
 // C++ language version (represent 98 as 3):
 
@@ -572,7 +591,9 @@
 // AppleClang 15.0.0  __apple_build_version__ == 15000040  gsl_COMPILER_APPLECLANG_VERSION == 1500  (Xcode 15.0)                     (LLVM 16.0.0)
 // AppleClang 15.0.0  __apple_build_version__ == 15000100  gsl_COMPILER_APPLECLANG_VERSION == 1500  (Xcode 15.1–15.2)                (LLVM 16.0.0)
 // AppleClang 15.0.0  __apple_build_version__ == 15000309  gsl_COMPILER_APPLECLANG_VERSION == 1500  (Xcode 15.3–15.4)                (LLVM 16.0.0)
-// AppleClang 16.0.0  __apple_build_version__ == 16000026  gsl_COMPILER_APPLECLANG_VERSION == 1600  (Xcode 16.0)                     (LLVM 17.0.6)
+// AppleClang 16.0.0  __apple_build_version__ == 16000026  gsl_COMPILER_APPLECLANG_VERSION == 1600  (Xcode 16.0–16.2)                (LLVM 17.0.6)
+// AppleClang 17.0.0  __apple_build_version__ == 17000013  gsl_COMPILER_APPLECLANG_VERSION == 1700  (Xcode 16.3)                     (LLVM 19.1.4)
+// AppleClang 17.0.0  __apple_build_version__ == 17000013  gsl_COMPILER_APPLECLANG_VERSION == 1700  (Xcode 16.4)                     (LLVM 19.1.5)
 
 #if defined(__apple_build_version__)
 #define gsl_COMPILER_APPLECLANG_VERSION gsl_COMPILER_VERSION(__clang_major__, __clang_minor__, __clang_patchlevel__)
@@ -796,6 +817,12 @@
 
 #define gsl_HAVE_CONSTEXPR_23_() gsl_HAVE_CONSTEXPR_23
 
+// Presence of C++26 language features:
+
+#define gsl_HAVE_CONSTEXPR_26 gsl_CPP26_OR_GREATER
+
+#define gsl_HAVE_CONSTEXPR_26_() gsl_HAVE_CONSTEXPR_26
+
 // Presence of C++ library features:
 
 #if gsl_BETWEEN(gsl_COMPILER_ARMCC_VERSION, 1, 600)
@@ -806,6 +833,7 @@
 #define gsl_STDLIB_CPP17_OR_GREATER 0
 #define gsl_STDLIB_CPP20_OR_GREATER 0
 #define gsl_STDLIB_CPP23_OR_GREATER 0
+#define gsl_STDLIB_CPP26_OR_GREATER 0
 #else
 #define gsl_STDLIB_CPP98_OR_GREATER gsl_CPP98_OR_GREATER
 #define gsl_STDLIB_CPP11_OR_GREATER gsl_CPP11_OR_GREATER
@@ -813,6 +841,7 @@
 #define gsl_STDLIB_CPP17_OR_GREATER gsl_CPP17_OR_GREATER
 #define gsl_STDLIB_CPP20_OR_GREATER gsl_CPP20_OR_GREATER
 #define gsl_STDLIB_CPP23_OR_GREATER gsl_CPP23_OR_GREATER
+#define gsl_STDLIB_CPP26_OR_GREATER gsl_CPP26_OR_GREATER
 #endif
 
 #define gsl_STDLIB_CPP11_100 (gsl_STDLIB_CPP11_OR_GREATER || gsl_COMPILER_MSVC_VER >= 1600)
@@ -926,6 +955,12 @@
 #define gsl_constexpr23 /*constexpr*/
 #endif
 
+#if gsl_HAVE(CONSTEXPR_26)
+#define gsl_constexpr26 constexpr
+#else
+#define gsl_constexpr26 /*constexpr*/
+#endif
+
 #if gsl_HAVE(EXPLICIT)
 #define gsl_explicit explicit
 #else
@@ -983,6 +1018,16 @@
 #define gsl_NORETURN
 #endif
 
+#if gsl_CPP20_OR_GREATER
+#if defined(_MSC_VER)                                                        // MSVC or MSVC-compatible compiler
+#if gsl_COMPILER_MSVC_VERSION >= 1929 || gsl_COMPILER_CLANG_VERSION >= 1800  // VS2019 v16.10 and later, or Clang 18 and later
+#define gsl_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#endif
+#else  // ! defined( _MSC_VER )
+#define gsl_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#endif  // defined( _MSC_VER )
+#endif  // gsl_CPP20_OR_GREATER
+
 #if gsl_HAVE(MAYBE_UNUSED)
 #define gsl_MAYBE_UNUSED [[maybe_unused]]
 #if gsl_COMPILER_GNUC_VERSION
@@ -1027,71 +1072,81 @@
 #if gsl_HAVE(TYPE_TRAITS)
 
 #define gsl_DEFINE_ENUM_BITMASK_OPERATORS_(ENUM)                      \
-    gsl_NODISCARD gsl_api inline gsl_constexpr ENUM                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr ENUM  \
     operator~(ENUM val) gsl_noexcept                                  \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return ENUM(~U(val));                                         \
     }                                                                 \
-    gsl_NODISCARD gsl_api inline gsl_constexpr ENUM                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr ENUM  \
     operator|(ENUM lhs, ENUM rhs) gsl_noexcept                        \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return ENUM(U(lhs) | U(rhs));                                 \
     }                                                                 \
-    gsl_NODISCARD gsl_api inline gsl_constexpr ENUM                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr ENUM  \
     operator&(ENUM lhs, ENUM rhs) gsl_noexcept                        \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return ENUM(U(lhs) & U(rhs));                                 \
     }                                                                 \
-    gsl_NODISCARD gsl_api inline gsl_constexpr ENUM                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr ENUM  \
     operator^(ENUM lhs, ENUM rhs) gsl_noexcept                        \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return ENUM(U(lhs) ^ U(rhs));                                 \
     }                                                                 \
-    gsl_api inline gsl_constexpr14 ENUM &                             \
+    gsl_MAYBE_UNUSED gsl_api inline gsl_constexpr14 ENUM &            \
     operator|=(ENUM &lhs, ENUM rhs) gsl_noexcept                      \
     {                                                                 \
         return lhs = lhs | rhs;                                       \
     }                                                                 \
-    gsl_api inline gsl_constexpr14 ENUM &                             \
+    gsl_MAYBE_UNUSED gsl_api inline gsl_constexpr14 ENUM &            \
     operator&=(ENUM &lhs, ENUM rhs) gsl_noexcept                      \
     {                                                                 \
         return lhs = lhs & rhs;                                       \
     }                                                                 \
-    gsl_api inline gsl_constexpr14 ENUM &                             \
+    gsl_MAYBE_UNUSED gsl_api inline gsl_constexpr14 ENUM &            \
     operator^=(ENUM &lhs, ENUM rhs) gsl_noexcept                      \
     {                                                                 \
         return lhs = lhs ^ rhs;                                       \
     }
 
+#if gsl_STDLIB_CPP20_OR_GREATER
+#define gsl_DEFINE_ENUM_RELATIONAL_OPERATORS_(ENUM)                           \
+    [[maybe_unused, nodiscard]] gsl_api inline constexpr std::strong_ordering \
+    operator<=>(ENUM lhs, ENUM rhs) gsl_noexcept                              \
+    {                                                                         \
+        using U = std::underlying_type_t<ENUM>;                               \
+        return U(lhs) <=> U(rhs);                                             \
+    }
+#else  // ! gsl_STDLIB_CPP20_OR_GREATER
 #define gsl_DEFINE_ENUM_RELATIONAL_OPERATORS_(ENUM)                   \
-    gsl_NODISCARD gsl_api inline gsl_constexpr bool                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr bool  \
     operator<(ENUM lhs, ENUM rhs) gsl_noexcept                        \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return U(lhs) < U(rhs);                                       \
     }                                                                 \
-    gsl_NODISCARD gsl_api inline gsl_constexpr bool                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr bool  \
     operator>(ENUM lhs, ENUM rhs) gsl_noexcept                        \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return U(lhs) > U(rhs);                                       \
     }                                                                 \
-    gsl_NODISCARD gsl_api inline gsl_constexpr bool                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr bool  \
     operator<=(ENUM lhs, ENUM rhs) gsl_noexcept                       \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return U(lhs) <= U(rhs);                                      \
     }                                                                 \
-    gsl_NODISCARD gsl_api inline gsl_constexpr bool                   \
+    gsl_MAYBE_UNUSED gsl_NODISCARD gsl_api inline gsl_constexpr bool  \
     operator>=(ENUM lhs, ENUM rhs) gsl_noexcept                       \
     {                                                                 \
         typedef typename ::gsl::std11::underlying_type<ENUM>::type U; \
         return U(lhs) >= U(rhs);                                      \
     }
+#endif  // gsl_STDLIB_CPP20_OR_GREATER
 
 //
 // Defines bitmask operators `|`, `&`, `^`, `~`, `|=`, `&=`, and `^=` for the given enum type.
@@ -1171,6 +1226,11 @@
 
 // Additional includes:
 
+#if gsl_FEATURE(STRING_SPAN)
+#include <ios>  // for ios_base, streamsize
+#include <string>
+#endif  // gsl_FEATURE( STRING_SPAN )
+
 #if !gsl_CPP11_OR_GREATER
 #include <algorithm>  // for swap() before C++11
 #endif                // ! gsl_CPP11_OR_GREATER
@@ -1182,6 +1242,10 @@
 #if !gsl_HAVE(ARRAY)
 #include <iterator>  // for reverse_iterator<>
 #endif
+
+#if gsl_STDLIB_CPP20_OR_GREATER
+#include <compare>
+#endif  // gsl_STDLIB_CPP20_OR_GREATER
 
 #if !gsl_HAVE(CONSTRAINED_SPAN_CONTAINER_CTOR) || !gsl_HAVE(AUTO)
 #include <vector>
@@ -1317,11 +1381,10 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     template <class T>
     class span;
 
-    // C++98 emulation:
-
     namespace detail
     {
 
+#if gsl_FEATURE(STRING_SPAN) || gsl_CONFIG(ALLOWS_SPAN_COMPARISON)
     // We implement `equal()` and `lexicographical_compare()` here to avoid having to pull in the <algorithm> header.
     template <class InputIt1, class InputIt2>
     bool equal(InputIt1 first1, InputIt1 last1, InputIt2 first2)
@@ -1344,6 +1407,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
             }
         return first1 == last1 && first2 != last2;
     }
+#endif  // gsl_FEATURE( STRING_SPAN ) || gsl_CONFIG( ALLOWS_SPAN_COMPARISON )
 
     }  // namespace detail
 
@@ -1539,7 +1603,31 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     {
     };
 
-#endif
+#else  // a.k.a. ! gsl_HAVE( VARIADIC_TEMPLATE )
+
+    template <bool V0, class T0, class T1>
+    struct conjunction_
+    {
+        typedef T0 type;
+    };
+    template <class T0, class T1>
+    struct conjunction_<true, T0, T1>
+    {
+        typedef T1 type;
+    };
+    template <bool V0, class T0, class T1>
+    struct disjunction_
+    {
+        typedef T0 type;
+    };
+    template <class T0, class T1>
+    struct disjunction_<false, T0, T1>
+    {
+        typedef T1 type;
+    };
+
+#endif  // gsl_HAVE( VARIADIC_TEMPLATE )
+
 
     template <typename>
     struct dependent_false : std11::integral_constant<bool, false>
@@ -1555,6 +1643,11 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
     template <bool v>
     struct bool_constant : std11::integral_constant<bool, v>
+    {
+    };
+
+    template <class T>
+    struct negation : std11::integral_constant<bool, !T::value>
     {
     };
 
@@ -1580,10 +1673,6 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     struct disjunction<T0, Ts...> : detail::disjunction_<T0::value, T0, Ts...>::type
     {
     };
-    template <class T>
-    struct negation : std11::integral_constant<bool, !T::value>
-    {
-    };
 
 #if gsl_CPP14_OR_GREATER
 
@@ -1604,6 +1693,18 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
     template <class... Ts>
     using void_t = typename make_void<Ts...>::type;
+
+#else  // a.k.a. ! gsl_CPP11_120
+
+    // For C++98, define simpler binary variants of `conjunction<>` and `disjunction<>`.
+    template <class T0, class T1>
+    struct conjunction : detail::conjunction_<T0::value, T0, T1>::type
+    {
+    };
+    template <class T0, class T1>
+    struct disjunction : detail::disjunction_<T0::value, T0, T1>::type
+    {
+    };
 
 #endif  // gsl_CPP11_120
 
@@ -2166,6 +2267,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     // Should be defined by user
     gsl_api void fail_fast_assert_handler(char const *const expression, char const *const message, char const *const file, int line);
 
+#if gsl_CONFIG_DEFAULTS_VERSION == 0
 #if defined(gsl_CONFIG_CONTRACT_VIOLATION_THROWS)
 
 #if gsl_HAVE(EXCEPTIONS)
@@ -2199,7 +2301,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     }
 
 #endif
-
+#endif  // gsl_CONFIG_DEFAULTS_VERSION == 0
 
     //
     // GSL.util: utilities
@@ -2807,6 +2909,42 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     namespace detail
     {
 
+    template <class T>
+    struct is_void : std11::false_type
+    {
+    };
+    template <>
+    struct is_void<void> : std11::true_type
+    {
+    };
+
+// helper class to figure out whether a pointer has an element type
+#if gsl_STDLIB_CPP11_OR_GREATER && gsl_HAVE(EXPRESSION_SFINAE)
+    // Avoid SFINAE for unary `operator*` (doesn't work for `std::unique_ptr<>` and the like) if an `element_type` member exists.
+    template <class T, class E = void>
+    struct has_element_type_ : std11::false_type
+    {
+    };
+    template <class T>
+    struct has_element_type_<T, std17::void_t<decltype(*std::declval<T>())>> : std11::true_type
+    {
+    };
+    template <class T, class E = void>
+    struct has_element_type : has_element_type_<T>
+    {
+    };
+    template <class T>
+    struct has_element_type<T, std17::void_t<typename T::element_type>> : std11::true_type
+    {
+    };
+#else   // a.k.a. ! ( gsl_STDLIB_CPP11_OR_GREATER && gsl_HAVE( EXPRESSION_SFINAE ) )
+    // Without C++11 and expression SFINAE, just assume that non-pointer types (e.g. smart pointers) have an `element_type` member
+    template <class T, class E = void>
+    struct has_element_type : std11::true_type
+    {
+    };
+#endif  // gsl_STDLIB_CPP11_OR_GREATER && gsl_HAVE( EXPRESSION_SFINAE )
+
 // helper class to figure out the pointed-to type of a pointer
 #if gsl_STDLIB_CPP11_OR_GREATER
     template <class T, class E = void>
@@ -2815,7 +2953,6 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         // For types without a member element_type (this could handle typed raw pointers but not `void*`)
         typedef typename std::remove_reference<decltype(*std::declval<T>())>::type type;
     };
-
     template <class T>
     struct element_type_helper<T, std17::void_t<typename T::element_type>>
     {
@@ -2823,14 +2960,13 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         typedef typename T::element_type type;
     };
 #else   // ! gsl_STDLIB_CPP11_OR_GREATER
-    // Pre-C++11, we cannot have decltype, so we cannot handle types without a member element_type
+    // Pre-C++11, we cannot have `decltype`, so we cannot handle non-pointer types without a member `element_type`
     template <class T, class E = void>
     struct element_type_helper
     {
         typedef typename T::element_type type;
     };
 #endif  // gsl_STDLIB_CPP11_OR_GREATER
-
     template <class T>
     struct element_type_helper<T *>
     {
@@ -2956,28 +3092,36 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     template <class T>
     struct not_null_accessor;
 
-    template <class Derived, class T, bool IsVoidPtr>
-    struct not_null_deref
+    template <class Derived, class T, bool HasElementType>
+    struct not_null_elem
     {
         typedef typename element_type_helper<T>::type element_type;
 
-        gsl_NODISCARD gsl_api gsl_constexpr14 element_type &
+#if gsl_CONFIG(TRANSPARENT_NOT_NULL)
+        gsl_NODISCARD gsl_api gsl_constexpr14 element_type *
+        get() const
+        {
+            return not_null_accessor<T>::get_checked(static_cast<Derived const &>(*this)).get();
+        }
+#endif  // gsl_CONFIG( TRANSPARENT_NOT_NULL )
+    };
+    template <class Derived, class T>
+    struct not_null_elem<Derived, T, false>
+    {
+    };
+    template <class Derived, class T, bool IsDereferencable>
+    struct gsl_EMPTY_BASES_ not_null_deref
+        : not_null_elem<Derived, T, detail::has_element_type<T>::value>
+    {
+        gsl_NODISCARD gsl_api gsl_constexpr14 typename element_type_helper<T>::type &
         operator*() const
         {
             return *not_null_accessor<T>::get_checked(static_cast<Derived const &>(*this));
         }
     };
     template <class Derived, class T>
-    struct not_null_deref<Derived, T, true>
-    {
-    };
-
-    template <class T>
-    struct is_void : std11::false_type
-    {
-    };
-    template <>
-    struct is_void<void> : std11::true_type
+    struct gsl_EMPTY_BASES_ not_null_deref<Derived, T, false>  // e.g. `void*`, `std::function<>`
+        : not_null_elem<Derived, T, detail::has_element_type<T>::value>
     {
     };
 
@@ -2986,12 +3130,30 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     {
     };
 
+    template <class T>
+    struct is_dereferencable : std17::conjunction<has_element_type<T>, std17::negation<is_void_ptr<T>>>
+    {
+    };
+
     }  // namespace detail
+
+#if gsl_HAVE(TYPE_TRAITS)
+    template <class T>
+    struct is_nullable : std::is_assignable<typename std::remove_cv<T>::type &, std::nullptr_t>
+    {
+    };
+
+#if gsl_CPP14_OR_GREATER
+    template <class T>
+    constexpr bool is_nullable_v = is_nullable<T>::value;
+#endif  // gsl_CPP14_OR_GREATER
+
+#endif  // gsl_HAVE( TYPE_TRAITS )
 
     template <class T>
     class
         gsl_EMPTY_BASES_  // not strictly needed, but will become necessary if we add more base classes
-            not_null : public detail::not_null_deref<not_null<T>, T, detail::is_void_ptr<T>::value>
+            not_null : public detail::not_null_deref<not_null<T>, T, detail::is_dereferencable<T>::value>
     {
     private:
         detail::not_null_data<T, detail::is_copyable<T>::value> data_;
@@ -3003,12 +3165,10 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         typedef detail::not_null_accessor<T> accessor;
 
     public:
-        typedef typename detail::element_type_helper<T>::type element_type;
-
 #if gsl_HAVE(TYPE_TRAITS)
         static_assert(!std::is_reference<T>::value, "T may not be a reference type");
         static_assert(!std::is_const<T>::value && !std::is_volatile<T>::value, "T may not be cv-qualified");
-        static_assert(std::is_assignable<T &, std::nullptr_t>::value, "T cannot be assigned nullptr");
+        static_assert(is_nullable<T>::value, "T must be a nullable type");
 #endif
 
 #if gsl_CONFIG(NOT_NULL_EXPLICIT_CTOR)
@@ -3019,7 +3179,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 #if gsl_HAVE(TYPE_TRAITS) && gsl_HAVE(DEFAULT_FUNCTION_TEMPLATE_ARG) && !gsl_BETWEEN(gsl_COMPILER_CLANG_VERSION, 1, 400) && !gsl_BETWEEN(gsl_COMPILER_APPLECLANG_VERSION, 1, 1001)
             // We *have* to use SFINAE with an NTTP arg here, otherwise the overload is ambiguous.
             ,
-            typename std::enable_if<(std::is_constructible<T, U>::value), int>::type = 0
+            typename std::enable_if<(std::is_constructible<T, U>::value && is_nullable<U>::value), int>::type = 0
 #endif
             >
         gsl_api gsl_constexpr14 explicit not_null(U other)
@@ -3027,6 +3187,26 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         {
             gsl_Expects(data_.ptr_ != gsl_nullptr);
         }
+#if gsl_HAVE(TYPE_TRAITS) && gsl_HAVE(DEFAULT_FUNCTION_TEMPLATE_ARG) && !gsl_BETWEEN(gsl_COMPILER_CLANG_VERSION, 1, 400) && !gsl_BETWEEN(gsl_COMPILER_APPLECLANG_VERSION, 1, 1001)
+        // Define the non-explicit constructors for non-nullable arguments only if the explicit constructor has a SFINAE constraint.
+        template <class U
+            // We *have* to use SFINAE with an NTTP arg here, otherwise the overload is ambiguous.
+            ,
+            typename std::enable_if<(std::is_constructible<T, U>::value && std::is_function<U>::value), int>::type = 0>
+        gsl_api gsl_constexpr14 /*implicit*/ not_null(U const &other)
+            : data_(T(other))
+        {
+        }
+        template <class U
+            // We *have* to use SFINAE with an NTTP arg here, otherwise the overload is ambiguous.
+            ,
+            typename std::enable_if<(std::is_constructible<T, U>::value && !std::is_function<U>::value && !is_nullable<U>::value), int>::type = 0>
+        gsl_api gsl_constexpr14 /*implicit*/ not_null(U other)
+            : data_(T(std::move(other)))
+        {
+            gsl_Expects(data_.ptr_ != gsl_nullptr);
+        }
+#endif  // gsl_HAVE( TYPE_TRAITS ) && gsl_HAVE( DEFAULT_FUNCTION_TEMPLATE_ARG ) && ! gsl_BETWEEN( gsl_COMPILER_CLANG_VERSION, 1, 400 ) && ! gsl_BETWEEN( gsl_COMPILER_APPLECLANG_VERSION, 1, 1001 )
 #else   // a.k.a. ! gsl_HAVE( MOVE_FORWARD )
         template <class U>
         gsl_api gsl_constexpr14 explicit not_null(U const &other)
@@ -3128,27 +3308,21 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         }
 #endif  // gsl_HAVE( MOVE_FORWARD )
 
-#if gsl_CONFIG(TRANSPARENT_NOT_NULL)
-        gsl_NODISCARD gsl_api gsl_constexpr14 element_type *
-        get() const
-        {
-            return accessor::get_checked(*this).get();
-        }
-#else
+#if !gsl_CONFIG(TRANSPARENT_NOT_NULL)
 #if gsl_CONFIG(NOT_NULL_GET_BY_CONST_REF)
         gsl_NODISCARD gsl_api gsl_constexpr14 T const &
         get() const
         {
             return accessor::get_checked(*this);
         }
-#else
+#else   // a.k.a. ! gsl_CONFIG( NOT_NULL_GET_BY_CONST_REF )
         gsl_NODISCARD gsl_api gsl_constexpr14 T
         get() const
         {
             return accessor::get_checked(*this);
         }
-#endif
-#endif
+#endif  // gsl_CONFIG( NOT_NULL_GET_BY_CONST_REF )
+#endif  // ! gsl_CONFIG( TRANSPARENT_NOT_NULL )
 
         // We want an implicit conversion operator that can be used to convert from both lvalues (by
         // const reference or by copy) and rvalues (by move). So it seems like we could define
@@ -3283,6 +3457,19 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         not_null(int) gsl_is_delete;
         not_null &operator=(int) gsl_is_delete;
 #endif
+
+#if gsl_STDLIB_CPP11_140 && (gsl_CPP14_OR_GREATER || !gsl_COMPILER_NVCC_VERSION)
+        template <typename... Ts>
+        gsl_api gsl_constexpr14 auto
+        operator()(Ts &&...args) const
+#if !gsl_COMPILER_NVCC_VERSION
+            // NVCC thinks that Substitution Failure Is An Error here
+            -> decltype(data_.ptr_(std::forward<Ts>(args)...))
+#endif  // ! gsl_COMPILER_NVCC_VERSION
+        {
+            return accessor::get_checked(*this)(std::forward<Ts>(args)...);
+        }
+#endif  // gsl_STDLIB_CPP11_140 && ( gsl_CPP14_OR_GREATER || ! gsl_COMPILER_NVCC_VERSION )
 
         // unwanted operators...pointers only point to single objects!
         not_null &operator++() gsl_is_delete;
@@ -3507,6 +3694,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     {
         return l.operator->() == r;
     }
+#if !gsl_CPP20_OR_GREATER
     template <class T, class U>
     gsl_NODISCARD inline gsl_api gsl_constexpr gsl_TRAILING_RETURN_TYPE_(bool)
     operator==(T const &l, not_null<U> const &r)
@@ -3514,6 +3702,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     {
         return l == r.operator->();
     }
+#endif  // ! gsl_CPP20_OR_GREATER
 
     // The C++ Core Guidelines discourage the use of pointer arithmetic, and gsl-lite consequently refrains from defining operators
     // for pointer arithmetic or the subscript operator in `not_null<>`. However, comparison of `not_null<>` objects is supported;
@@ -3523,6 +3712,22 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     // can be sorted and searched, or that pointers can be used as a key in a relational container such as `std::map<>`.
     // Therefore, we also define relational comparison operators for `not_null<>`.
 
+#if gsl_STDLIB_CPP20_OR_GREATER
+    template <class T, class U>
+    [[nodiscard]] inline gsl_api constexpr auto
+    operator<=>(not_null<T> const &l, not_null<U> const &r)
+        ->decltype(l.operator->() <=> r.operator->())
+    {
+        return l.operator->() <=> r.operator->();
+    }
+    template <class T, class U>
+    [[nodiscard]] inline gsl_api constexpr auto
+    operator<=>(not_null<T> const &l, U const &r)
+        ->decltype(l.operator->() <=> r)
+    {
+        return l.operator->() <=> r;
+    }
+#endif  // gsl_STDLIB_CPP20_OR_GREATER
     template <class T, class U>
     gsl_NODISCARD inline gsl_api gsl_constexpr gsl_TRAILING_RETURN_TYPE_(bool)
     operator<(not_null<T> const &l, not_null<U> const &r)
@@ -3545,6 +3750,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         return l < r.operator->();
     }
 
+#if !gsl_CPP20_OR_GREATER
     template <class T, class U>
     gsl_NODISCARD inline gsl_api gsl_constexpr gsl_TRAILING_RETURN_TYPE_(bool)
     operator!=(not_null<T> const &l, not_null<U> const &r)
@@ -3566,6 +3772,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     {
         return !(l == r);
     }
+#endif  // ! gsl_CPP20_OR_GREATER
 
     template <class T, class U>
     gsl_NODISCARD inline gsl_api gsl_constexpr gsl_TRAILING_RETURN_TYPE_(bool)
@@ -3672,6 +3879,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 #endif  // gsl_HAVE( VARIADIC_TEMPLATE )
 
 
+#if gsl_FEATURE(BYTE)
 //
 // Byte-specific type.
 //
@@ -3834,6 +4042,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         return ::gsl::to_byte(~b.v);
     }
 #endif  // gsl_HAVE( ENUM_CLASS_CONSTRUCTION_FROM_UNDERLYING_TYPE )
+#endif  // gsl_FEATURE( BYTE )
 
 #if gsl_FEATURE_TO_STD(WITH_CONTAINER)
 
@@ -4300,7 +4509,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         }
 #endif
 
-#if !gsl_DEPRECATE_TO_LEVEL(2)
+#if gsl_FEATURE(BYTE) && !gsl_DEPRECATE_TO_LEVEL(2)
         // member as_bytes(), as_writeable_bytes deprecated since 0.17.0
 
         gsl_DEPRECATED_MSG("use free function gsl::as_bytes() instead")
@@ -4460,6 +4669,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         detail::copy_n(src.data(), src.size(), dest.data());
     }
 
+#if gsl_FEATURE(BYTE)
     // span creator functions (see ctors)
 
     template <class T>
@@ -4485,6 +4695,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         return span<byte>(reinterpret_cast<byte *>(spn.data()), spn.size_bytes());  // NOLINT
     }
 #endif  // deprecate
+#endif  // gsl_FEATURE( BYTE )
 
 #if gsl_FEATURE_TO_STD(MAKE_SPAN)
 
@@ -4530,16 +4741,14 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
     template <class Container, class EP = decltype(std17::data(std::declval<Container &>()))>
     gsl_NODISCARD inline gsl_constexpr auto
-    make_span(Container & cont)
-        -> span<typename std::remove_pointer<EP>::type>
+    make_span(Container & cont) -> span<typename std::remove_pointer<EP>::type>
     {
         return span<typename std::remove_pointer<EP>::type>(cont);
     }
 
     template <class Container, class EP = decltype(std17::data(std::declval<Container &>()))>
     gsl_NODISCARD inline gsl_constexpr auto
-    make_span(Container const &cont)
-        -> span<const typename std::remove_pointer<EP>::type>
+    make_span(Container const &cont) -> span<const typename std::remove_pointer<EP>::type>
     {
         return span<const typename std::remove_pointer<EP>::type>(cont);
     }
@@ -4550,15 +4759,16 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     inline span<T>
     make_span(std::vector<T> & cont)
     {
-        return span<T>(with_container, cont);
+        return span<T>(cont.data(), cont.data() + cont.size());
     }
 
     template <class T>
     inline span<const T>
     make_span(std::vector<T> const &cont)
     {
-        return span<const T>(with_container, cont);
+        return span<const T>(cont.data(), cont.data() + cont.size());
     }
+
 #endif
 
 #if gsl_FEATURE_TO_STD(WITH_CONTAINER)
@@ -4594,10 +4804,9 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     {
         return span<typename Ptr::element_type>(ptr, count);
     }
-
 #endif  // gsl_FEATURE_TO_STD( MAKE_SPAN )
 
-#if gsl_FEATURE_TO_STD(BYTE_SPAN)
+#if gsl_FEATURE(BYTE) && gsl_FEATURE_TO_STD(BYTE_SPAN)
 
     template <class T>
     gsl_NODISCARD gsl_api inline gsl_constexpr span<byte>
@@ -4613,11 +4822,11 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         return span<const byte>(reinterpret_cast<byte const *>(&t), sizeof(T));
     }
 
-#endif  // gsl_FEATURE_TO_STD( BYTE_SPAN )
+#endif  // gsl_FEATURE( BYTE ) && gsl_FEATURE_TO_STD( BYTE_SPAN )
 
-    // #if gsl_FEATURE( STRING_SPAN )
+#if gsl_FEATURE(STRING_SPAN)
     //
-    //  basic_string_span:
+    // basic_string_span:
     //
 
     template <class T>
@@ -4722,7 +4931,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <std::size_t N>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(element_type (&arr)[N])
             : span_(remove_z(gsl_ADDRESSOF(arr[0]), N))
@@ -4733,7 +4942,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <std::size_t N>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(std::array<typename std11::remove_const<element_type>::type, N> &arr)
             : span_(remove_z(arr))
@@ -4742,14 +4951,14 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <std::size_t N>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(std::array<typename std11::remove_const<element_type>::type, N> const &arr)
             : span_(remove_z(arr))
         {
         }
 
-#endif
+#endif  // gsl_HAVE( ARRAY )
 
 #if gsl_HAVE(CONSTRAINED_SPAN_CONTAINER_CTOR)
 
@@ -4759,7 +4968,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
                 gsl_ENABLE_IF_((
                     !detail::is_std_array<Container>::value && !detail::is_basic_string_span<Container>::value && std::is_convertible<typename Container::pointer, pointer>::value && std::is_convertible<typename Container::pointer, decltype(std::declval<Container>().data())>::value))>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(Container &cont)
             : span_((cont))
@@ -4772,7 +4981,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
                 gsl_ENABLE_IF_((
                     !detail::is_std_array<Container>::value && !detail::is_basic_string_span<Container>::value && std::is_convertible<typename Container::pointer, pointer>::value && std::is_convertible<typename Container::pointer, decltype(std::declval<Container const &>().data())>::value))>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(Container const &cont)
             : span_((cont))
@@ -4783,7 +4992,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <class Container>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(Container &cont)
             : span_(cont)
@@ -4792,7 +5001,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <class Container>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(Container const &cont)
             : span_(cont)
@@ -4803,7 +5012,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <class U>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_api gsl_constexpr basic_string_span(span<U> const &rhs)
             : span_(rhs)
@@ -4839,7 +5048,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         template <class U
                 gsl_ENABLE_IF_((std::is_convertible<typename basic_string_span<U>::pointer, pointer>::value))>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_api gsl_constexpr basic_string_span(basic_string_span<U> const &rhs)
             : span_(reinterpret_cast<pointer>(rhs.data()), rhs.length())  // NOLINT
@@ -4850,7 +5059,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
         template <class U
                 gsl_ENABLE_IF_((std::is_convertible<typename basic_string_span<U>::pointer, pointer>::value))>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_api gsl_constexpr basic_string_span(basic_string_span<U> &&rhs)
             : span_(reinterpret_cast<pointer>(rhs.data()), rhs.length())  // NOLINT
@@ -4860,7 +5069,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <class CharTraits, class Allocator>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(
                 std::basic_string<typename std11::remove_const<element_type>::type, CharTraits, Allocator> &str)
@@ -4870,7 +5079,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
         template <class CharTraits, class Allocator>
 #if gsl_DEPRECATE_TO_LEVEL(7)
-        gsl_DEPRECATED_MSG("basic_string_span<><> is deprecated; use span<> instead")
+        gsl_DEPRECATED_MSG("basic_string_span<> is deprecated; use span<> instead")
 #endif  // gsl_DEPRECATE_TO_LEVEL( 7 )
             gsl_constexpr basic_string_span(
                 std::basic_string<typename std11::remove_const<element_type>::type, CharTraits, Allocator> const &str)
@@ -5106,7 +5315,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     }
 #endif
 
-#else  // gsl_CONFIG( ALLOWS_NONSTRICT_SPAN_COMPARISON )
+#else  // ! gsl_CONFIG( ALLOWS_NONSTRICT_SPAN_COMPARISON )
 
     template <class T>
     gsl_SUPPRESS_MSGSL_WARNING(stl.1)
@@ -5200,6 +5409,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
 
 #endif  // gsl_HAVE( DEFAULT_FUNCTION_TEMPLATE_ARG )
 
+#if gsl_FEATURE(BYTE)
     // convert basic_string_span to byte span:
 
     template <class T>
@@ -5208,7 +5418,8 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     {
         return span<const byte>(reinterpret_cast<const byte *>(spn.data()), spn.size_bytes());  // NOLINT
     }
-    // #endif // gsl_FEATURE( STRING_SPAN )
+#endif  // gsl_FEATURE( BYTE )
+#endif  // gsl_FEATURE( STRING_SPAN )
 
     //
     // String types:
@@ -5222,7 +5433,7 @@ gsl_DISABLE_MSVC_WARNINGS(26432 26410 26415 26418 26472 26439 26440 26455 26473 
     typedef const wchar_t *cwzstring;
 #endif
 
-    // #if gsl_FEATURE( STRING_SPAN )
+#if gsl_FEATURE(STRING_SPAN)
 
     typedef basic_string_span<char> string_span;
     typedef basic_string_span<char const> cstring_span;
@@ -5345,7 +5556,6 @@ inline std::basic_string< typename std::remove_const<T>::type > to_string( basic
     }
 
 #endif  // gsl_HAVE( WCHAR )
-    // #endif // gsl_FEATURE( STRING_SPAN )
 
     //
     // ensure_sentinel()
@@ -5405,9 +5615,8 @@ inline std::basic_string< typename std::remove_const<T>::type > to_string( basic
     }
 #endif
 
-    // #if gsl_FEATURE( STRING_SPAN )
     //
-    //  basic_zstring_span<> - A view of contiguous null-terminated characters, replace (*,len).
+    // basic_zstring_span<> - A view of contiguous null-terminated characters, replace (*,len).
     //
 
     template <typename T>
@@ -5493,7 +5702,7 @@ inline std::basic_string< typename std::remove_const<T>::type > to_string( basic
     typedef basic_zstring_span<wchar_t> wzstring_span;
     typedef basic_zstring_span<wchar_t const> cwzstring_span;
 #endif
-    // #endif // gsl_FEATURE( STRING_SPAN )
+#endif  // gsl_FEATURE( STRING_SPAN )
 
 }  // namespace gsl
 
@@ -5558,6 +5767,7 @@ public:
     }
 };
 
+#if gsl_FEATURE(BYTE)
 template <>
 struct hash<::gsl::byte>
 {
@@ -5572,6 +5782,7 @@ public:
 #endif  // gsl_CONFIG_DEFAULTS_VERSION >= 1
     }
 };
+#endif  // gsl_FEATURE( BYTE )
 
 }  // namespace std
 
@@ -5666,27 +5877,38 @@ using ::gsl::make_not_null;
 using ::gsl::not_null;
 using ::gsl::not_null_ic;
 
+#if gsl_FEATURE(BYTE)
 using ::gsl::byte;
 
 using ::gsl::to_byte;
 using ::gsl::to_integer;
-using ::gsl::to_string;
 using ::gsl::to_uchar;
+#endif  // gsl_FEATURE( BYTE )
 
+#if gsl_FEATURE_TO_STD(WITH_CONTAINER)
 using ::gsl::with_container;
 using ::gsl::with_container_t;
+#endif  // gsl_FEATURE_TO_STD( WITH_CONTAINER )
 
+using ::gsl::span;
+#if gsl_FEATURE_TO_STD(MAKE_SPAN)
+using ::gsl::make_span;
+#endif  // gsl_FEATURE_TO_STD( MAKE_SPAN )
+#if gsl_FEATURE(BYTE) && gsl_FEATURE_TO_STD(BYTE_SPAN)
+using ::gsl::byte_span;
+#endif  // gsl_FEATURE( BYTE ) && gsl_FEATURE_TO_STD( BYTE_SPAN )
+using ::gsl::copy;
+#if gsl_FEATURE(BYTE)
 using ::gsl::as_bytes;
 using ::gsl::as_writable_bytes;
-using ::gsl::byte_span;
-using ::gsl::copy;
-using ::gsl::make_span;
-using ::gsl::span;
 #if !gsl_DEPRECATE_TO_LEVEL(6)
 using ::gsl::as_writeable_bytes;
 #endif
+#endif  // gsl_FEATURE( BYTE )
 
-// # if gsl_FEATURE( STRING_SPAN )
+#if gsl_FEATURE(STRING_SPAN)
+using ::gsl::to_string;
+
 using ::gsl::basic_string_span;
 using ::gsl::cstring_span;
 using ::gsl::string_span;
@@ -5694,7 +5916,9 @@ using ::gsl::string_span;
 using ::gsl::basic_zstring_span;
 using ::gsl::czstring_span;
 using ::gsl::zstring_span;
-// # endif // gsl_FEATURE( STRING_SPAN )
+
+using ::gsl::ensure_z;
+#endif  // gsl_FEATURE( STRING_SPAN )
 
 using ::gsl::czstring;
 using ::gsl::zstring;
@@ -5703,13 +5927,11 @@ using ::gsl::zstring;
 using ::gsl::cwzstring;
 using ::gsl::wzstring;
 
-// #  if gsl_FEATURE( STRING_SPAN )
+#if gsl_FEATURE(STRING_SPAN)
 using ::gsl::cwzstring_span;
 using ::gsl::wzstring_span;
-// #  endif // gsl_FEATURE( STRING_SPAN )
+#endif  // gsl_FEATURE( STRING_SPAN )
 #endif  // gsl_HAVE( WCHAR )
-
-using ::gsl::ensure_z;
 
 }  // namespace gsl_lite
 

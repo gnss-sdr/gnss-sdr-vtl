@@ -25,6 +25,12 @@ All notable changes to GNSS-SDR will be documented in this file.
 
 - Fix building option `-DENABLE_ION=ON` when using CMake >= 4.0.
 
+### Improvements in Usability:
+
+- Added a GNSS skyplot visualization utility at `utils/skyplot/skyplot.py`,
+  which generates a skyplot from a RINEX navigation file and saves the image in
+  PDF format. It requires `numpy` and `matplotlib`.
+
 See the definitions of concepts and metrics at
 https://gnss-sdr.org/design-forces/
 
