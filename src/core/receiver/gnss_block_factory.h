@@ -57,7 +57,7 @@ public:
 
     std::unique_ptr<GNSSBlockInterface> GetSignalConditioner(const ConfigurationInterface* configuration, int ID = -1);
 
-    std::unique_ptr<std::vector<std::unique_ptr<GNSSBlockInterface>>> GetChannels(const ConfigurationInterface* configuration,
+    std::vector<std::unique_ptr<GNSSBlockInterface>> GetChannels(const ConfigurationInterface* configuration,
         Concurrent_Queue<pmt::pmt_t>* queue);
 
     std::unique_ptr<GNSSBlockInterface> GetObservables(const ConfigurationInterface* configuration);

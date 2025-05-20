@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2011-2025 Carles Fernandez-Prades <carles.fernandez@cttc.es>
+
 GNSS-SDR Authorship
 --------------------------------------------------------------------------------
 
@@ -64,13 +67,10 @@ Malte Lenhart            malte.lenhart@mailbox.org              Contributor
 Mara Branzanti           mara.branzanti@gmail.com               Contributor
 Marc Molina              marc.molina.pena@gmail.com             Contributor
 Marc Sales               marcsales92@gmail.com                  Contributor
+Mathieu Favreau          favreau.mathieu@hotmail.com            Contributor
 Piyush Gupta             piyush04111999@gmail.com               Contributor
 Rodrigo Muñoz            rodrigo.munoz@proteinlab.cl            Contributor
 Stefan van der Linden    spvdlinden@gmail.com                   Contributor
 Víctor Castillo-Agüero   victorcastilloaguero@gmail.com         Contributor
 Will Silberman           wsilberm@google.com                    Contributor
 Carlos Paniego           carpanie@hotmail.com                   Artwork
-
-
-# SPDX-License-Identifier: GPL-3.0-or-later
-# SPDX-FileCopyrightText: 2011-2024 Carles Fernandez-Prades <carles.fernandez@cttc.es>

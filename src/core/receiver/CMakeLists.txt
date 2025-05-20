@@ -170,6 +170,12 @@ if(USE_BOOST_ASIO_IO_CONTEXT)
             -DUSE_BOOST_ASIO_IO_CONTEXT=1
     )
 endif()
+if(CMAKE_CXX_STANDARD AND CMAKE_CXX_STANDARD LESS 17)
+    target_compile_definitions(core_receiver
+    PRIVATE
+        -DCXX_LESS_THAN_17=1
+    )
+endif()
 
 target_link_libraries(core_receiver
     PUBLIC

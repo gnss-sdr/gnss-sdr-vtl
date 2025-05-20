@@ -20,10 +20,16 @@ All notable changes to GNSS-SDR will be documented in this file.
   [lintian tag](https://lintian.debian.org/tags/very-long-line-length-in-source-file.html)
   warning).
 - Added formatting of `.proto` files with clang-format. Added check in CI job.
+- Major refactoring of the `GNSSFlowgraph` and `GNSSBlockFactory` class
+  implementations, greatly improving maintainability, simplifying the addition
+  of new signals, and eliminating a lot of duplicated code. Awesome contribution
+  by @MathieuFavreau.
 
 ### Improvements in Portability:
 
 - Fix building option `-DENABLE_ION=ON` when using CMake >= 4.0.
+- Updated `gsl-lite` to v1.0.1. See the
+  [gsl-lite release](https://github.com/gsl-lite/gsl-lite/releases/tag/v1.0.1).
 
 ### Improvements in Usability:
 

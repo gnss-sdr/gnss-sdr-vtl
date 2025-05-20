@@ -24,8 +24,8 @@
 #include <span>
 namespace own = std;
 #else
-#include <gsl/gsl-lite.hpp>
-namespace own = gsl;
+#include <gsl-lite/gsl-lite.hpp>
+namespace own = gsl_lite;
 #endif
 
 /** \addtogroup Algorithms_Library
